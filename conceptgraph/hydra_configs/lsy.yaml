@@ -1,0 +1,6 @@
+defaults:
+  - base_paths
+
+dataset_root: ${data_root}/extracted_data
+dataset_config: ${repo_root}/conceptgraph/dataset/dataconfigs/lsy.yaml
+scene_id: run_1

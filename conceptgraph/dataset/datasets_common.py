@@ -1014,6 +1014,70 @@ class Hm3dDataset(GradSLAMDataset):
             poses.append(pose)
             
         return poses
+    
+
+class LSY_Dataset(GradSLAMDataset):
+    def __init__(
+        self,
+        config_dict,
+        basedir,
+        sequence,
+        stride: Optional[int] = None,
+        start: Optional[int] = 0,
+        end: Optional[int] = -1,
+        desired_height: Optional[int] = 480,
+        desired_width: Optional[int] = 640,
+        load_embeddings: Optional[bool] = False,
+        embedding_dir: Optional[str] = "embeddings",
+        embedding_dim: Optional[int] = 512,
+        **kwargs,
+    ):
+        self.input_folder = os.path.join(basedir, sequence)
+        self.pose_path = os.path.join(self.input_folder, "traj.txt")
+        super().__init__(
+            config_dict,
+            stride=stride,
+            start=start,
+            end=end,
+            desired_height=desired_height,
+            desired_width=desired_width,
+            load_embeddings=load_embeddings,
+            embedding_dir=embedding_dir,
+            embedding_dim=embedding_dim,
+            **kwargs,
+        )
+
+    def get_filepaths(self):
+        color_paths = natsorted(glob.glob(f"{self.input_folder}/results/frame*.jpg"))
+        depth_paths = natsorted(glob.glob(f"{self.input_folder}/results/depth*.png"))
+        embedding_paths = None
+        if self.load_embeddings:
+            embedding_paths = natsorted(
+                glob.glob(f"{self.input_folder}/{self.embedding_dir}/*.pt")
+            )
+        return color_paths, depth_paths, embedding_paths
+
+    def load_poses(self):
+        poses = []
+        with open(self.pose_path, "r") as f:
+            lines = f.readlines()
+        for i in range(self.num_imgs):
+            line = lines[i]
+            c2w = np.array(list(map(float, line.split()))).reshape(4, 4)
+            temp = np.copy(c2w)
+            c2w[:3, 0] = temp[:3, 1]
+            c2w[:3, 1] = -1*temp[:3, 0]
+            c2w[0, 3] = -temp[1, 3]
+            c2w[1, 3] = temp[0, 3]
+            c2w[2, 3] = -temp[2, 3]
+            c2w = torch.from_numpy(c2w).float()
+            poses.append(c2w)
+        return poses
+
+    def read_embedding_from_file(self, embedding_file_path):
+        embedding = torch.load(embedding_file_path)
+        return embedding.permute(0, 2, 3, 1)  # (1, H, W, embedding_dim)
+
 
 def load_dataset_config(path, default_path=None):
     """
@@ -1120,6 +1184,8 @@ def get_dataset(dataconfig, basedir, sequence, **kwargs):
         return MultiscanDataset(config_dict, basedir, sequence, **kwargs)
     elif config_dict['dataset_name'].lower() in ['hm3d']:
         return Hm3dDataset(config_dict, basedir, sequence, **kwargs)
+    elif config_dict['dataset_name'].lower() in ['lsy']:
+        return LSY_Dataset(config_dict, basedir, sequence, **kwargs)
     else:
         raise ValueError(f"Unknown dataset name {config_dict['dataset_name']}")
 
@@ -1169,6 +1235,8 @@ if __name__ == "__main__":
         channels_first=False,
         has_embeddings=False,  # KM
     )
+
+
 
     # # SLAM
     # slam = PointFusion(odom="gt", dsratio=1, device="cuda:0", use_embeddings=False)
