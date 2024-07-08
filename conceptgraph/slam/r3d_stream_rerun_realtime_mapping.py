@@ -175,7 +175,7 @@ def main(cfg : DictConfig):
         # Set the classes for the detection model
         detection_model.set_classes(obj_classes.get_classes_arr())
 
-        openai_client = get_openai_client()
+        # openai_client = get_openai_client()
         
     else:
         print("\n".join(["NOT Running detections..."] * 10))
@@ -279,7 +279,9 @@ def main(cfg : DictConfig):
             )
             
             # No edges during streaming for now
-            labels, edges, edge_image = make_vlm_edges(image, curr_det, obj_classes, detection_class_labels, det_exp_vis_path, color_path, make_edges_flag=False, openai_client=openai_client)
+            # labels, edges, edge_image, captions = make_vlm_edges_and_captions(image, curr_det, obj_classes, detection_class_labels, det_exp_vis_path, color_path, cfg.make_edges, openai_client)
+
+            labels, edges, edge_image, captions = make_vlm_edges_and_captions(image, curr_det, obj_classes, detection_class_labels, det_exp_vis_path, color_path, False, None)
             
             image_crops, image_feats, text_feats = compute_clip_features_batched(
                 image_rgb, curr_det, clip_model, clip_preprocess, clip_tokenizer, obj_classes.get_classes_arr(), cfg.device)
@@ -445,7 +447,7 @@ def main(cfg : DictConfig):
             device=cfg['device']
             # Note: Removed 'match_method' and 'phys_bias' as they do not appear in the provided merge function
         )
-        map_edges = process_edges(match_indices, gobs, len(objects), objects, map_edges)
+        map_edges = process_edges(match_indices, gobs, len(objects), objects, map_edges, frame_idx)
 
         is_final_frame = frame_idx == total_frames - 1
         if is_final_frame:

@@ -303,10 +303,12 @@ def orr_log_edges(objects, map_edges, obj_classes):
         orr.Clear(recursive=True)
     )
     # do the same for edges
+    print("================= here ==================")
     for map_edge_tuple in map_edges.edges_by_index.items():
         obj1_idx, obj2_idx = map_edge_tuple[0]
         map_edge = map_edge_tuple[1]
         num_dets = map_edge.num_detections
+        print("num_dets:", num_dets)
         if num_dets <= 1:
             continue
         obj1_label = f"{objects[obj1_idx]['curr_obj_num']}"
@@ -388,3 +390,5 @@ def orr_log_edges(objects, map_edges, obj_classes):
                 full_label = full_label
             )
         )
+
+        print("has log:", full_label)

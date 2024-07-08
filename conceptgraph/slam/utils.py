@@ -301,21 +301,17 @@ def merge_obj2_into_obj1(obj1, obj2, downsample_voxel_size, dbscan_remove_noise,
     unhandled_keys = set(obj2.keys()) - all_handled_keys
     if unhandled_keys:
         raise ValueError(f"Unhandled keys detected in obj2: {unhandled_keys}. Please update the merge function to handle these attributes.")
-
+    
     # Process extend and add attributes
     for attr in extend_attributes:
         if attr in obj1 and attr in obj2:
             obj1[attr].extend(obj2[attr])
-    
-    for attr in add_attributes:
-        if attr in obj1 and attr in obj2:
-            obj1[attr] += obj2[attr]
 
     # Custom handling for 'pcd', 'bbox', 'clip_ft', and 'text_ft'
     n_obj1_det = obj1['num_detections']
     n_obj2_det = obj2['num_detections']
     
-        # Handling 'caption'
+    # Handling 'caption'
     if 'caption' in obj1 and 'caption' in obj2:
         n_obj1_det = obj1['num_detections']
         for key, value in obj2['caption'].items():
@@ -342,6 +338,11 @@ def merge_obj2_into_obj1(obj1, obj2, downsample_voxel_size, dbscan_remove_noise,
     #                    obj2['text_ft'] * n_obj2_det) / (
     #                    n_obj1_det + n_obj2_det)
     # obj1['text_ft'] = F.normalize(obj1['text_ft'], dim=0)
+
+    # Process add attributes
+    for attr in add_attributes:
+        if attr in obj1 and attr in obj2:
+            obj1[attr] += obj2[attr]
 
     return obj1
 
@@ -886,8 +887,8 @@ def filter_gobs(
         else:
             raise NotImplementedError(f"Unhandled type {type(gobs[attribute])}")
         
-    filtered_captions = filter_captions(gobs['captions'], gobs['detection_class_labels'])
-    gobs['captions'] = filtered_captions
+    # filtered_captions = filter_captions(gobs['captions'], gobs['detection_class_labels'])
+    # gobs['captions'] = filtered_captions
 
     return gobs
 
@@ -1083,7 +1084,7 @@ def make_detection_list_from_pcd_and_gobs(
         
         is_bg_object = bool(curr_class_name in obj_classes.get_bg_classes_arr())
         
-        # print(f"Line 937, tracker.total_object_count INCREMENTED: {tracker.total_object_count }")
+        print(f"Line 937, tracker.total_object_count INCREMENTED: {tracker.total_object_count }")
         num_obj_in_class = tracker.curr_class_count[curr_class_name]
         
         
@@ -1095,7 +1096,7 @@ def make_detection_list_from_pcd_and_gobs(
             'color_path' : [color_path],                     # path to the RGB image
             'class_name' : curr_class_name,                         # global class id for this detection
             'class_id' : [curr_class_idx],                         # global class id for this detection
-            'captions' : [gobs['captions'][mask_idx]],           # captions for this detection
+            # 'captions' : [gobs['captions'][mask_idx]],           # captions for this detection
             'num_detections' : 1,                            # number of detections in this object
             'mask': [gobs['mask'][mask_idx]],
             'xyxy': [gobs['xyxy'][mask_idx]],

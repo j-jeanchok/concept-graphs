@@ -75,6 +75,7 @@ class DemoApp:
         return final_transformation
         
     def get_frame_data(self):
+
         if self.event.wait(timeout=1):  # Timeout ensures it doesn't wait forever if no frame is ready
             rgb = self.session.get_rgb_frame()
             depth = self.session.get_depth_frame()
@@ -82,7 +83,7 @@ class DemoApp:
             intrinsic_mat = self.get_intrinsic_mat_from_coeffs(self.session.get_intrinsic_mat())
             camera_pose = self.session.get_camera_pose()  # Quaternion + world position (accessible via camera_pose.[qx|qy|qz|qw|tx|ty|tz])
 
-            # print(intrinsic_mat)
+            print(intrinsic_mat)
 
             # You can now e.g. create point cloud by projecting the depth map using the intrinsic matrix.
             

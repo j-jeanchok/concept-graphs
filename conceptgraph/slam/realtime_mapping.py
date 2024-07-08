@@ -170,6 +170,11 @@ def main(cfg : DictConfig):
     exit_early_flag = False
     counter = 0
     for frame_idx in trange(len(dataset)):
+        import pdb
+        import time
+
+        start = time.time()
+
         tracker.curr_frame_idx = frame_idx
         counter+=1
 
@@ -207,7 +212,7 @@ def main(cfg : DictConfig):
             image_rgb = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
 
             # Do initial object detection
-            results = detection_model.predict(color_path, conf=0.1, verbose=False)
+            results = measure_time(detection_model.predict)(color_path, conf=0.1, verbose=False)
             confidences = results[0].boxes.conf.cpu().numpy()
             detection_class_ids = results[0].boxes.cls.cpu().numpy().astype(int)
             xyxy_tensor = results[0].boxes.xyxy
@@ -215,7 +220,7 @@ def main(cfg : DictConfig):
 
             # Get Masks Using SAM or MobileSAM
             # UltraLytics SAM
-            sam_out = sam_predictor.predict(color_path, bboxes=xyxy_tensor, verbose=False)
+            sam_out = measure_time(sam_predictor.predict)(color_path, bboxes=xyxy_tensor, verbose=False)
             masks_tensor = sam_out[0].masks.data
 
             masks_np = masks_tensor.cpu().numpy()
@@ -229,11 +234,11 @@ def main(cfg : DictConfig):
             )
 
             # Compute and save the clip features of detections
-            image_crops, image_feats, text_feats = compute_clip_features_batched(
+            image_crops, image_feats, text_feats = measure_time(compute_clip_features_batched)(
                 image_rgb, curr_det, clip_model, clip_preprocess, clip_tokenizer, obj_classes.get_classes_arr(), cfg.device)
 
             # increment total object detections
-            tracker.increment_total_detections(len(curr_det.xyxy))
+            measure_time(tracker.increment_total_detections)(len(curr_det.xyxy))
 
             # Save results
             # Convert the detections to a dict. The elements are in np.array
@@ -288,9 +293,9 @@ def main(cfg : DictConfig):
         adjusted_pose = unt_pose
 
         # resize the observation if needed
-        resized_gobs = resize_gobs(raw_gobs, image_rgb)
+        resized_gobs = measure_time(resize_gobs)(raw_gobs, image_rgb)
         # filter the observations
-        filtered_gobs = filter_gobs(resized_gobs, image_rgb, 
+        filtered_gobs = measure_time(filter_gobs)(resized_gobs, image_rgb, 
             skip_bg=cfg.skip_bg,
             BG_CLASSES=obj_classes.get_bg_classes_arr(),
             mask_area_threshold=cfg.mask_area_threshold,
@@ -299,6 +304,11 @@ def main(cfg : DictConfig):
         )
 
         gobs = filtered_gobs
+
+        end = time.time()
+        print("time:", end - start)
+        pdb.set_trace()
+
 
         if len(gobs['mask']) == 0: # no detections in this frame
             continue

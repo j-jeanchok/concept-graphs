@@ -97,7 +97,7 @@ from conceptgraph.slam.mapping import (
 from conceptgraph.utils.model_utils import compute_clip_features_batched
 from conceptgraph.utils.general_utils import get_vis_out_path, cfg_to_dict, check_run_detections
 
-
+import time
 # Disable torch gradient computation
 torch.set_grad_enabled(False)
 
@@ -174,7 +174,8 @@ def main(cfg : DictConfig):
 
         ## Initialize the detection models
         detection_model = measure_time(YOLO)('yolov8l-world.pt')
-        sam_predictor = SAM('sam_l.pt') # SAM('mobile_sam.pt') # UltraLytics SAM
+        # sam_predictor = SAM('sam_l.pt') # 
+        sam_predictor = SAM('mobile_sam.pt') # UltraLytics SAM
         # sam_predictor = measure_time(get_sam_predictor)(cfg) # Normal SAM
         clip_model, _, clip_preprocess = open_clip.create_model_and_transforms(
             "ViT-H-14", "laion2b_s32b_b79k"
@@ -185,7 +186,7 @@ def main(cfg : DictConfig):
         # Set the classes for the detection model
         detection_model.set_classes(obj_classes.get_classes_arr())
 
-        openai_client = get_openai_client()
+        # openai_client = get_openai_client()
         
     else:
         print("\n".join(["NOT Running detections..."] * 10))
@@ -200,6 +201,7 @@ def main(cfg : DictConfig):
     exit_early_flag = False
     counter = 0
     for frame_idx in trange(len(dataset)):
+        start_time = time.time()
         tracker.curr_frame_idx = frame_idx
         counter+=1
         orr.set_time_sequence("frame", frame_idx)
@@ -234,8 +236,15 @@ def main(cfg : DictConfig):
         
         vis_save_path_for_vlm = get_vlm_annotated_image_path(det_exp_vis_path, color_path)
         vis_save_path_for_vlm_edges = get_vlm_annotated_image_path(det_exp_vis_path, color_path, w_edges=True)
+
+        # import pdb
+        # import time
+        # pdb.set_trace()
+
+        # start_time = time.time()
         
         if run_detections:
+            detection_start = time.time()
             results = None
             # opencv can't read Path objects...
             image = cv2.imread(str(color_path)) # This will in BGR color space
@@ -269,10 +278,14 @@ def main(cfg : DictConfig):
             )
             
             # Make the edges
-            labels, edges, edge_image, captions = make_vlm_edges_and_captions(image, curr_det, obj_classes, detection_class_labels, det_exp_vis_path, color_path, cfg.make_edges, openai_client)
+            # labels, edges, edge_image, captions = make_vlm_edges_and_captions(image, curr_det, obj_classes, detection_class_labels, det_exp_vis_path, color_path, cfg.make_edges, openai_client)
 
+            labels, edges, edge_image, captions = measure_time(make_vlm_edges_and_captions)(image, curr_det, obj_classes, detection_class_labels, det_exp_vis_path, color_path, False, None)
+
+            start_clip = time.time()
             image_crops, image_feats, text_feats = compute_clip_features_batched(
                 image_rgb, curr_det, clip_model, clip_preprocess, clip_tokenizer, obj_classes.get_classes_arr(), cfg.device)
+            end_clip = time.time()
 
             # increment total object detections
             tracker.increment_total_detections(len(curr_det.xyxy))
@@ -292,10 +305,18 @@ def main(cfg : DictConfig):
                 "detection_class_labels": detection_class_labels,
                 "labels": labels,
                 "edges": edges,
-                "captions": captions,
+                # "captions": captions,
             }
 
             raw_gobs = results
+
+            # Debug
+            annotated_image, labels = vis_result_fast(image, curr_det, obj_classes.get_classes_arr())
+            # import matplotlib.pyplot as plt
+            # plt.imshow(annotated_image)
+            # plt.show()
+
+            detection_end = time.time()
 
             # save the detections if needed
             if cfg.save_detections:
@@ -337,6 +358,8 @@ def main(cfg : DictConfig):
         orr_log_vlm_image(vis_save_path_for_vlm)
         orr_log_vlm_image(vis_save_path_for_vlm_edges, label="w_edges")
 
+        start_2dbbox_time = time.time()
+
         # resize the observation if needed
         resized_gobs = resize_gobs(raw_gobs, image_rgb)
         # filter the observations
@@ -355,6 +378,10 @@ def main(cfg : DictConfig):
 
         # this helps make sure things like pillows on couches are separate objects
         gobs['mask'] = mask_subtract_contained(gobs['xyxy'], gobs['mask'])
+
+        end_2dbbox_time = time.time()
+
+        start_to_pcd = time.time()
 
         obj_pcds_and_bboxes = measure_time(detections_to_obj_pcd_and_bbox)(
             depth_array=depth_array,
@@ -386,8 +413,12 @@ def main(cfg : DictConfig):
             obj_pcds_and_bboxes, gobs, color_path, obj_classes, frame_idx
         )
 
+        end_to_pcd = time.time()
+
         if len(detection_list) == 0: # no detections, skip
             continue
+
+        start_merge_pcd_to_objects = time.time()
 
         # if no objects yet in the map,
         # just add all the objects from the current frame
@@ -465,7 +496,42 @@ def main(cfg : DictConfig):
                 edges_to_delete.append((curr_obj1_idx, curr_obj2_idx))
         for edge in edges_to_delete:
             map_edges.delete_edge(edge[0], edge[1])
+
+        end_merge_pcd_to_objects = time.time()
         ### Perform post-processing periodically if told so
+
+        ##### Draw my 2d segmentation with instance color
+        # detection_list
+        """
+            An object_id can have multiple detections (which means this object in 3D have been seen in multiple images (viewpoint))
+            Therefore, the object could have multiple mask from different images (viewpoint)
+            We create a hash table to find the instance color for a object on this image. 
+            If the object has been merged to the previous object, then we need to find the instance color from global. 
+        """
+        # 
+        inst_table = {}
+        for detected_obj_idx, existing_obj_match_idx in enumerate(match_indices):
+            if existing_obj_match_idx == None:
+                inst_table[detected_obj_idx] = detection_list[detected_obj_idx]['inst_color']
+            else:
+                inst_table[detected_obj_idx] = objects[existing_obj_match_idx]['inst_color']
+
+        mask_image = np.zeros(color_np.shape)
+        for id in range(len(detection_list)):
+            object = detection_list[id]
+            """
+            "num_detections" in the object of the detction_list is always 1, and so does the "mask".
+            Only objects in the global "objects" which has been merged will have more than 1 "mask" and "num_detections"
+            """
+            mask_image[object["mask"][0]] = inst_table[id]
+            import pdb
+            pdb.set_trace()
+
+        orr.log(
+            "cam/inst",
+            orr.Image(mask_image)
+        )
+        ######### Some objects might be filtered, we do things before filtered ########
 
         # Denoising
         if processing_needed(
@@ -473,7 +539,8 @@ def main(cfg : DictConfig):
             cfg["run_denoise_final_frame"],
             frame_idx,
             is_final_frame,
-        ):
+        ):  
+            print("denoise_objects")
             objects = measure_time(denoise_objects)(
                 downsample_voxel_size=cfg['downsample_voxel_size'], 
                 dbscan_remove_noise=cfg['dbscan_remove_noise'], 
@@ -491,7 +558,8 @@ def main(cfg : DictConfig):
             frame_idx,
             is_final_frame,
         ):
-            objects = filter_objects(
+            print("filter_objects")
+            objects = measure_time(filter_objects)(
                 obj_min_points=cfg['obj_min_points'], 
                 obj_min_detections=cfg['obj_min_detections'], 
                 objects=objects,
@@ -505,6 +573,7 @@ def main(cfg : DictConfig):
             frame_idx,
             is_final_frame,
         ):
+            print("merge_objects")
             objects, map_edges = measure_time(merge_objects)(
                 merge_overlap_thresh=cfg["merge_overlap_thresh"],
                 merge_visual_sim_thresh=cfg["merge_visual_sim_thresh"],
@@ -520,7 +589,13 @@ def main(cfg : DictConfig):
                 map_edges=map_edges
             )
         orr_log_objs_pcd_and_bbox(objects, obj_classes)
+        print("========================== before orr_log_edges ========================")
         orr_log_edges(objects, map_edges, obj_classes)
+
+        # end_time = time.time()
+        # print(f"time: {end_time - start_time}") 
+
+        # pdb.set_trace()
 
         if cfg.save_objects_all_frames:
             save_objects_for_frame(
@@ -582,13 +657,26 @@ def main(cfg : DictConfig):
                 "exit_early_flag": exit_early_flag,
                 "is_final_frame": is_final_frame,
                 })
+        end_time = time.time()
+        import pdb
+        print(f"detection + clip time: {detection_end - detection_start}")
+        print(f"- clip time: {end_clip - start_clip}")
+        print(f"2d bbox time: {end_2dbbox_time - start_2dbbox_time}")
+        print(f"to pcd: {end_to_pcd - start_to_pcd}")
+        print(f"pcd to objects: {end_merge_pcd_to_objects - start_merge_pcd_to_objects}")
+        print(f"cost time per frame: {end_time - start_time}")
+        # pdb.set_trace()
+        
+        
+
+
     # LOOP OVER -----------------------------------------------------
     
     # Consolidate captions 
-    for object in objects:
-        obj_captions = object['captions'][:20]
-        consolidated_caption = consolidate_captions(openai_client, obj_captions)
-        object['consolidated_caption'] = consolidated_caption
+    # for object in objects:
+    #     obj_captions = object['captions'][:20]
+    #     consolidated_caption = consolidate_captions(openai_client, obj_captions)
+    #     object['consolidated_caption'] = consolidated_caption
 
     handle_rerun_saving(cfg.use_rerun, cfg.save_rerun, cfg.exp_suffix, exp_out_path)
 

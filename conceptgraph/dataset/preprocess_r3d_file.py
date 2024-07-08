@@ -8,7 +8,7 @@ import os
 import cv2
 import liblzfse
 import numpy as np
-import png
+# import png
 import tyro
 import yaml
 from dataclasses import dataclass
@@ -22,7 +22,8 @@ from pathlib import Path
 
 @dataclass
 class ProgramArgs:
-    datapath = "/home/kuwajerw/new_local_data/new_record3d/ali_apartment/co_store"
+    # datapath = "/home/kuwajerw/new_local_data/new_record3d/ali_apartment/co_store"
+    datapath = "/home/marvinchung/Desktop/slam_data/record3d_scans/co_store"
     output_dir = None  # Optional, set dynamically if not provided
 
 desired_width = 1440

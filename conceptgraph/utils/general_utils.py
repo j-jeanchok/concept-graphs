@@ -346,7 +346,7 @@ def filter_detections(
         curr_area = (curr_xyxy[2] - curr_xyxy[0]) * (curr_xyxy[3] - curr_xyxy[1])
         keep = True
         
-            # Calculate the total number of pixels as a threshold for small masks
+        # Calculate the total number of pixels as a threshold for small masks
         total_pixels = image.shape[0] * image.shape[1]
         small_mask_size = total_pixels * min_mask_size_ratio
 
@@ -410,6 +410,51 @@ def get_vlm_annotated_image_path(det_exp_vis_path, color_path, w_edges=False, su
     )
     return str(vis_save_path)
 
+# def make_vlm_edges(image, curr_det, obj_classes, detection_class_labels, det_exp_vis_path, color_path, make_edges_flag, openai_client):
+#     """
+#     Process detections by filtering, annotating, and extracting object relationships.
+
+#     Args:
+#     image: The image on which detections are performed.
+#     curr_det: Current detections from the detection model.
+#     obj_classes: Object classes used in detection.
+#     detection_class_labels: Labels for each detection class.
+#     det_exp_vis_path: Directory path for saving visualizations.
+#     color_path: Additional path element for creating unique save paths.
+#     cfg: Configuration object containing settings like `make_edges`.
+#     openai_client: Client object for OpenAI used in relationship extraction.
+
+#     Returns:
+#     detection_class_labels: The original labels provided for detection classes.
+#     labels: The labels after filtering detections.
+#     edges: List of edges between detected objects if `make_edges` is true, otherwise empty list.
+#     """
+#     # Filter the detections
+#     filtered_detections, labels = filter_detections(
+#         image=image,
+#         detections=curr_det, 
+#         classes=obj_classes,
+#         top_x_detections=150000,
+#         confidence_threshold=0.00001,
+#         given_labels=detection_class_labels,
+#     )
+    
+#     edges = []
+#     edge_image = None
+#     if make_edges_flag:
+#         vis_save_path_for_vlm = get_vlm_annotated_image_path(det_exp_vis_path, color_path)
+#         vis_save_path_for_vlm_edges = get_vlm_annotated_image_path(det_exp_vis_path, color_path, w_edges=True)
+#         annotated_image_for_vlm, sorted_indices = annotate_for_vlm(image, filtered_detections, obj_classes, labels, save_path=vis_save_path_for_vlm)
+
+#         label_nums = [f"object {str(label.split(' ')[-1])}" for label in labels]
+#         cv2.imwrite(str(vis_save_path_for_vlm), annotated_image_for_vlm)
+#         print(f"Line 313, vis_save_path_for_vlm: {vis_save_path_for_vlm}")
+        
+#         edges = get_obj_rel_from_image_gpt4v(openai_client, vis_save_path_for_vlm, label_nums)
+#         edge_image = plot_edges_from_vlm(annotated_image_for_vlm, edges, filtered_detections, obj_classes, labels, sorted_indices, save_path=vis_save_path_for_vlm_edges)
+    
+#     return labels, edges, edge_image
+
 def make_vlm_edges_and_captions(image, curr_det, obj_classes, detection_class_labels, det_exp_vis_path, color_path, make_edges_flag, openai_client):
     """
     Process detections by filtering, annotating, and extracting object relationships.
@@ -444,6 +489,7 @@ def make_vlm_edges_and_captions(image, curr_det, obj_classes, detection_class_la
     
     edges = []
     edge_image = None
+    captions = None
     if make_edges_flag:
         vis_save_path_for_vlm = get_vlm_annotated_image_path(det_exp_vis_path, color_path)
         vis_save_path_for_vlm_edges = get_vlm_annotated_image_path(det_exp_vis_path, color_path, w_edges=True)
@@ -685,7 +731,7 @@ def save_obj_json(exp_suffix, exp_out_path, objects):
         obj_dict = {
             "id": curr_obj['curr_obj_num'],
             "object_tag": curr_obj['class_name'],
-            "object_caption": curr_obj['consolidated_caption'],
+            # "object_caption": curr_obj['consolidated_caption'],
             "bbox_extent": bbox_extent,
             "bbox_center": bbox_center,
             "bbox_volume": bbox_volume  # Add the volume to the dictionary
