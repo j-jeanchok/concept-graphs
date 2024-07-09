@@ -173,8 +173,9 @@ def main(cfg : DictConfig):
         det_exp_path.mkdir(parents=True, exist_ok=True)
 
         ## Initialize the detection models
-        detection_model = measure_time(YOLO)('yolov8l-world.pt')
-        sam_predictor = SAM('sam_l.pt') # SAM('mobile_sam.pt') # UltraLytics SAM
+        detection_model = measure_time(YOLO)("yolov8l-world.pt")
+        sam_predictor = SAM('sam_l.pt')
+        # sam_predictor = SAM("mobile_sam.pt")  # UltraLytics SAM
         # sam_predictor = measure_time(get_sam_predictor)(cfg) # Normal SAM
         clip_model, _, clip_preprocess = open_clip.create_model_and_transforms(
             "ViT-H-14", "laion2b_s32b_b79k"
@@ -186,7 +187,6 @@ def main(cfg : DictConfig):
         detection_model.set_classes(obj_classes.get_classes_arr())
 
         openai_client = get_openai_client()
-        
     else:
         print("\n".join(["NOT Running detections..."] * 10))
 
@@ -505,7 +505,7 @@ def main(cfg : DictConfig):
             frame_idx,
             is_final_frame,
         ):
-            objects, map_edges = measure_time(merge_objects)(
+            merged_results = measure_time(merge_objects)(
                 merge_overlap_thresh=cfg["merge_overlap_thresh"],
                 merge_visual_sim_thresh=cfg["merge_visual_sim_thresh"],
                 merge_text_sim_thresh=cfg["merge_text_sim_thresh"],
@@ -517,8 +517,12 @@ def main(cfg : DictConfig):
                 spatial_sim_type=cfg["spatial_sim_type"],
                 device=cfg["device"],
                 do_edges=cfg["make_edges"],
-                map_edges=map_edges
+                map_edges=map_edges,
             )
+            if cfg["make_edges"]:
+                objects, map_edges = merged_results
+            else:
+                objects = merged_results
         orr_log_objs_pcd_and_bbox(objects, obj_classes)
         orr_log_edges(objects, map_edges, obj_classes)
 
