@@ -517,7 +517,7 @@ def main(cfg : DictConfig):
                 spatial_sim_type=cfg["spatial_sim_type"],
                 device=cfg["device"],
                 do_edges=cfg["make_edges"],
-                map_edges=map_edges,
+                map_edges=map_edges
             )
             if cfg["make_edges"]:
                 objects, map_edges = merged_results
