@@ -173,7 +173,7 @@ def main(cfg : DictConfig):
         det_exp_path.mkdir(parents=True, exist_ok=True)
 
         ## Initialize the detection models
-        detection_model = measure_time(YOLO)("yolov8l-world.pt")
+        detection_model = measure_time(YOLO)('yolov8l-world.pt')
         sam_predictor = SAM('sam_l.pt')
         # sam_predictor = SAM("mobile_sam.pt")  # UltraLytics SAM
         # sam_predictor = measure_time(get_sam_predictor)(cfg) # Normal SAM
