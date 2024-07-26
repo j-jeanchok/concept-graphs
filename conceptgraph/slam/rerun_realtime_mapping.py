@@ -23,6 +23,7 @@ from omegaconf import DictConfig
 import open_clip
 from ultralytics import YOLO, SAM
 import supervision as sv
+from collections import Counter
 
 # Local application/library specific imports
 from conceptgraph.utils.optional_rerun_wrapper import (
@@ -38,7 +39,7 @@ from conceptgraph.utils.optional_rerun_wrapper import (
 from conceptgraph.utils.optional_wandb_wrapper import OptionalWandB
 from conceptgraph.utils.geometry import rotation_matrix_to_quaternion
 from conceptgraph.utils.logging_metrics import DenoisingTracker, MappingTracker
-from conceptgraph.utils.vlm import get_obj_rel_from_image_gpt4v, get_openai_client
+from conceptgraph.utils.vlm import consolidate_captions, get_obj_rel_from_image_gpt4v, get_openai_client
 from conceptgraph.utils.ious import mask_subtract_contained
 from conceptgraph.utils.general_utils import (
     ObjectClasses, 
@@ -49,10 +50,12 @@ from conceptgraph.utils.general_utils import (
     handle_rerun_saving, 
     load_saved_detections, 
     load_saved_hydra_json_config, 
-    make_vlm_edges, 
+    make_vlm_edges_and_captions, 
     measure_time, 
-    save_detection_results, 
-    save_hydra_config, 
+    save_detection_results,
+    save_edge_json, 
+    save_hydra_config,
+    save_obj_json, 
     save_objects_for_frame, 
     save_pointcloud, 
     should_exit_early, 
@@ -268,9 +271,9 @@ def main(cfg : DictConfig):
                 mask=masks_np,
             )
             
-            # Make the edges
-            labels, edges, edge_image = make_vlm_edges(image, curr_det, obj_classes, detection_class_labels, det_exp_vis_path, color_path, False,  None)
-            
+            # Make the edges            
+            labels, edges, edge_image, captions = make_vlm_edges_and_captions(image, curr_det, obj_classes, detection_class_labels, det_exp_vis_path, color_path, cfg.make_edges, openai_client)
+
             image_crops, image_feats, text_feats = compute_clip_features_batched(
                 image_rgb, curr_det, clip_model, clip_preprocess, clip_tokenizer, obj_classes.get_classes_arr(), cfg.device)
 
@@ -292,6 +295,7 @@ def main(cfg : DictConfig):
                 "detection_class_labels": detection_class_labels,
                 "labels": labels,
                 "edges": edges,
+                "captions": captions,
             }
 
             raw_gobs = results
@@ -436,12 +440,34 @@ def main(cfg : DictConfig):
             device=cfg['device']
             # Note: Removed 'match_method' and 'phys_bias' as they do not appear in the provided merge function
         )
-        map_edges = process_edges(match_indices, gobs, len(objects), objects, map_edges)
+        # fix the class names for objects
+        # they should be the most popular name, not the first name
+        for idx, obj in enumerate(objects):
+            temp_class_name = obj["class_name"]
+            curr_obj_class_id_counter = Counter(obj['class_id'])
+            most_common_class_id = curr_obj_class_id_counter.most_common(1)[0][0]
+            most_common_class_name = obj_classes.get_classes_arr()[most_common_class_id]
+            if temp_class_name != most_common_class_name:
+                obj["class_name"] = most_common_class_name
 
+        map_edges = process_edges(match_indices, gobs, len(objects), objects, map_edges, frame_idx)
         is_final_frame = frame_idx == len(dataset) - 1
         if is_final_frame:
             print("Final frame detected. Performing final post-processing...")
 
+        # Clean up outlier edges
+        edges_to_delete = []
+        for curr_map_edge in map_edges.edges_by_index.values():
+            curr_obj1_idx = curr_map_edge.obj1_idx
+            curr_obj2_idx = curr_map_edge.obj2_idx
+            obj1_class_name = objects[curr_obj1_idx]['class_name'] 
+            obj2_class_name = objects[curr_obj2_idx]['class_name']
+            curr_first_detected = curr_map_edge.first_detected
+            curr_num_det = curr_map_edge.num_detections
+            if (frame_idx - curr_first_detected > 5) and curr_num_det < 2:
+                edges_to_delete.append((curr_obj1_idx, curr_obj2_idx))
+        for edge in edges_to_delete:
+            map_edges.delete_edge(edge[0], edge[1])
         ### Perform post-processing periodically if told so
 
         # Denoising
@@ -561,6 +587,12 @@ def main(cfg : DictConfig):
                 })
     # LOOP OVER -----------------------------------------------------
     
+    # Consolidate captions 
+    for object in objects:
+        obj_captions = object['captions'][:20]
+        consolidated_caption = consolidate_captions(openai_client, obj_captions)
+        object['consolidated_caption'] = consolidated_caption
+
     handle_rerun_saving(cfg.use_rerun, cfg.save_rerun, cfg.exp_suffix, exp_out_path)
 
     # Save the pointcloud
@@ -573,6 +605,20 @@ def main(cfg : DictConfig):
             obj_classes=obj_classes,
             latest_pcd_filepath=cfg.latest_pcd_filepath,
             create_symlink=True,
+            edges=map_edges
+        )
+
+    if cfg.save_json:
+        save_obj_json(
+            exp_suffix=cfg.exp_suffix,
+            exp_out_path=exp_out_path,
+            objects=objects
+        )
+        
+        save_edge_json(
+            exp_suffix=cfg.exp_suffix,
+            exp_out_path=exp_out_path,
+            objects=objects,
             edges=map_edges
         )
 

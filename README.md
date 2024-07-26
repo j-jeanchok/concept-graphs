@@ -351,6 +351,7 @@ And then we can type `cabinet` and press enter, and the point cloud will be colo
 
 For this, you'll need to use the Record3D app and buy the premium version which costs arouund $5-10. The scans you make using the app can be exported to an `.r3d` file. You can then use googledrive or a usb cable or something else to get the `.r3d` file on to your computer. Then right click -> extract out it's contents into a folder, and you'll probably wanna rename the folder to a convenient name. 
 
+
 Then you want to use the `concept-graphs/conceptgraph/dataset/preprocess_r3d_file.py` to convert that into a dataset that conceptgraphs can use. This is also covered in the getting started video. In the `preprocess_r3d_file.py`, set the datapath variable to your extracted r3d folder. So for me it is:
 
 ```
@@ -390,6 +391,16 @@ We've commited a pre-made vscode debug config file to the repo to make debugging
 ## Misc
 
 To stop a script early, you can use the `concept-graphs/conceptgraph/hydra_configs/early_exit.json` file. If you set `early_exit: true` in the file, then the script will exit early after the current iteration is finished. This is useful if you want to stop the script early, but still save the results from the current iteration.
+
+# Classes File
+
+The classes file is used as a set of class labels to the object detection model. This is a tradeoff between sacrificing some "open-vocabulary-ness" for more stable detections. We have two classes files avaiable:
+```bash
+concept-graphs/conceptgraph/scannet200_classes.txt
+concept-graphs/conceptgraph/ram_classes_4500.txt
+```
+The scannet classes are the labels from the [scannet200 dataset](https://rozdavid.github.io/scannet200).
+The ram classes are the tags from the [RAM model](https://recognize-anything.github.io/).
 
 
 ## Troubleshooting

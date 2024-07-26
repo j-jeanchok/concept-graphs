@@ -11,8 +11,9 @@ from conceptgraph.slam.utils import prepare_objects_save_vis
 from conceptgraph.utils.ious import mask_subtract_contained
 import supervision as sv
 import scipy.ndimage as ndi 
-from conceptgraph.utils.vlm import get_obj_rel_from_image_gpt4v
+from conceptgraph.utils.vlm import get_obj_captions_from_image_gpt4v, get_obj_rel_from_image_gpt4v, vlm_extract_object_captions
 import cv2
+import re
 
 
 from omegaconf import OmegaConf
@@ -157,8 +158,8 @@ def annotate_for_vlm(
     color: tuple=(0, 255, 0), 
     thickness: int=2, 
     text_color: tuple=(255, 255, 255), 
-    text_scale: float=0.5, 
-    text_thickness: int=3, 
+    text_scale: float=0.6, 
+    text_thickness: int=2, 
     text_bg_color: tuple=(255, 255, 255), 
     text_bg_opacity: float=0.95,  # Opacity from 0 (transparent) to 1 (opaque)
     small_mask_threshold = 0.002,
@@ -186,17 +187,18 @@ def annotate_for_vlm(
         mask = detections_mask[i]
         label = labels[i]
         label_num = label.split(" ")[-1]
+        label_name = re.sub(r'\s*\d+$', '', label).strip()
         bbox = detections.xyxy[i]
         
         obj_color = obj_classes.get_class_color(int(detections.class_id[i]))
         # multiply by 255 to convert to BGR
         obj_color = tuple([int(c * 255) for c in obj_color])
         
-        # Convert mask to uint8 type
+        # Add color over mask for this object 
         mask_uint8 = mask.astype(np.uint8)
         mask_color_image = np.zeros_like(annotated_image)
         mask_color_image[mask_uint8 > 0] = obj_color
-        cv2.addWeighted(annotated_image, 1, mask_color_image, mask_opacity, 0, annotated_image)
+        # cv2.addWeighted(annotated_image, 1, mask_color_image, mask_opacity, 0, annotated_image)
 
         # Draw contours
         contours, _ = cv2.findContours(mask_uint8 * 255, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
@@ -213,7 +215,7 @@ def annotate_for_vlm(
             x_center, y_center = int(x_center), int(y_center)
 
         # Prepare text background
-        text = label_num
+        text = label_num + ": " + label_name 
         (text_width, text_height), baseline = cv2.getTextSize(text, cv2.FONT_HERSHEY_SIMPLEX, text_scale, text_thickness)
         text_x_left = x_center - text_width // 2
         text_y_top = y_center + (text_height) // 2
@@ -290,8 +292,8 @@ def plot_edges_from_vlm(image: np.ndarray, edges, detections: sv.Detections, obj
     # Draw edges based on relationships specified
     for edge in edges:
         src_label, _, dst_label = edge
-        src_label = src_label.split(' ')[-1]  # Assuming label format is 'object X'
-        dst_label = dst_label.split(' ')[-1]  # Assuming label format is 'object X'
+        src_label = str(src_label) # Assuming label is int of object_index
+        dst_label = str(dst_label)
         if src_label in label_to_centroid_color and dst_label in label_to_centroid_color:
             src_centroid, _ = label_to_centroid_color[src_label]
             dst_centroid, dst_color = label_to_centroid_color[dst_label]
@@ -359,6 +361,7 @@ def filter_detections(
             
             if mask_iou(curr_mask, other_mask) > iou_threshold:
                 keep = False
+                print(f"Removing {classes.get_classes_arr()[curr_class_id]} because it has an IoU of {mask_iou(curr_mask, other_mask)} with object {classes.get_classes_arr()[other_class_id]}.")
                 break
             
             
@@ -407,24 +410,27 @@ def get_vlm_annotated_image_path(det_exp_vis_path, color_path, w_edges=False, su
     )
     return str(vis_save_path)
 
-def make_vlm_edges(image, curr_det, obj_classes, detection_class_labels, det_exp_vis_path, color_path, make_edges_flag, openai_client):
+def make_vlm_edges_and_captions(image, curr_det, obj_classes, detection_class_labels, det_exp_vis_path, color_path, make_edges_flag, openai_client):
     """
     Process detections by filtering, annotating, and extracting object relationships.
 
     Args:
-    image: The image on which detections are performed.
-    curr_det: Current detections from the detection model.
-    obj_classes: Object classes used in detection.
-    detection_class_labels: Labels for each detection class.
-    det_exp_vis_path: Directory path for saving visualizations.
-    color_path: Additional path element for creating unique save paths.
-    cfg: Configuration object containing settings like `make_edges`.
-    openai_client: Client object for OpenAI used in relationship extraction.
+        image (numpy.ndarray): The image on which detections are performed.
+        curr_det (list): Current detections from the detection model.
+        obj_classes (list): Object classes used in detection.
+        detection_class_labels (list): Labels for each detection class.
+        det_exp_vis_path (str): Directory path for saving visualizations.
+        color_path (str): Additional path element for creating unique save paths.
+        make_edges_flag (bool): Flag indicating whether to create edges between detected objects.
+        openai_client (OpenAIClient): Client object for OpenAI used in relationship extraction.
 
     Returns:
-    detection_class_labels: The original labels provided for detection classes.
-    labels: The labels after filtering detections.
-    edges: List of edges between detected objects if `make_edges` is true, otherwise empty list.
+        tuple: A tuple containing the following elements:
+            - detection_class_labels (list): The original labels provided for detection classes.
+            - labels (list): The labels after filtering detections.
+            - edges (list): List of edges between detected objects if `make_edges_flag` is True, otherwise an empty list.
+            - edge_image (numpy.ndarray): Annotated image with edges plotted if `make_edges_flag` is True, otherwise None.
+            - captions (list): List of captions for each detected object if `make_edges_flag` is True, otherwise None.
     """
     # Filter the detections
     filtered_detections, labels = filter_detections(
@@ -443,14 +449,21 @@ def make_vlm_edges(image, curr_det, obj_classes, detection_class_labels, det_exp
         vis_save_path_for_vlm_edges = get_vlm_annotated_image_path(det_exp_vis_path, color_path, w_edges=True)
         annotated_image_for_vlm, sorted_indices = annotate_for_vlm(image, filtered_detections, obj_classes, labels, save_path=vis_save_path_for_vlm)
 
-        label_nums = [f"object {str(label.split(' ')[-1])}" for label in labels]
+        label_list = []
+        for label in labels:
+            label_num = str(label.split(" ")[-1])
+            label_name = re.sub(r'\s*\d+$', '', label).strip()
+            full_label = f"{label_num}: {label_name}"
+            label_list.append(full_label)
+
         cv2.imwrite(str(vis_save_path_for_vlm), annotated_image_for_vlm)
         print(f"Line 313, vis_save_path_for_vlm: {vis_save_path_for_vlm}")
         
-        edges = get_obj_rel_from_image_gpt4v(openai_client, vis_save_path_for_vlm, label_nums)
+        edges = get_obj_rel_from_image_gpt4v(openai_client, vis_save_path_for_vlm, label_list)
+        captions = get_obj_captions_from_image_gpt4v(openai_client, vis_save_path_for_vlm, label_list)
         edge_image = plot_edges_from_vlm(annotated_image_for_vlm, edges, filtered_detections, obj_classes, labels, sorted_indices, save_path=vis_save_path_for_vlm_edges)
     
-    return labels, edges, edge_image
+    return labels, edges, edge_image, captions
     
 def handle_rerun_saving(use_rerun, save_rerun, exp_suffix, exp_out_path):
     # Save the rerun output if needed
@@ -652,6 +665,80 @@ class ObjectClasses:
         Returns a dictionary of class colors, just like self.class_to_color, but indexed by class index.
         """
         return {str(i): self.get_class_color(i) for i in range(len(self.classes))}
+    
+def save_obj_json(exp_suffix, exp_out_path, objects):
+    """
+    Saves the objects to a JSON file with the specified suffix.
+
+    Args:
+    - exp_suffix (str): Suffix for the experiment, used in naming the saved file.
+    - exp_out_path (Path or str): Output path for the experiment's saved files.
+    - objects: The objects to save, assumed to have necessary attributes.
+    """
+    json_obj_list = {}
+    for curr_idx, curr_obj in enumerate(objects):
+        obj_key = f"object_{curr_idx + 1}"
+        bbox_extent = [round(val, 2) for val in curr_obj['bbox'].extent]  # Round values to 2 decimal places
+        bbox_center = [round(val, 2) for val in curr_obj['bbox'].center]  # Assuming `center` is an iterable like a list or tuple
+        bbox_volume = round(bbox_extent[0] * bbox_extent[1] * bbox_extent[2], 2)  # Calculate volume and round to 2 decimal places
+        
+        obj_dict = {
+            "id": curr_obj['curr_obj_num'],
+            "object_tag": curr_obj['class_name'],
+            "object_caption": curr_obj['consolidated_caption'],
+            "bbox_extent": bbox_extent,
+            "bbox_center": bbox_center,
+            "bbox_volume": bbox_volume  # Add the volume to the dictionary
+        }
+        json_obj_list[obj_key] = obj_dict
+        
+    json_obj_out_path = Path(exp_out_path) / f"obj_json_{exp_suffix}.json"
+    json_obj_out_path.parent.mkdir(parents=True, exist_ok=True)
+    with open(json_obj_out_path, "w") as f:
+        json.dump(json_obj_list, f, indent=2)
+    print(f"Saved object JSON to {json_obj_out_path}")
+    
+
+def save_edge_json(exp_suffix, exp_out_path, objects, edges):
+    """
+    Saves the edges to a JSON file with the specified suffix.
+
+    Args:
+    - exp_suffix (str): Suffix for the experiment, used in naming the saved file.
+    - exp_out_path (Path or str): Output path for the experiment's saved files.
+    - objects: The objects involved in the edges.
+    - edges: The edges to save, assumed to have necessary attributes.
+    """
+    json_edge_list = {}
+    for curr_idx, curr_edge_item in enumerate(list(edges.edges_by_index.items())):
+        curr_edj_tup, curr_edge = curr_edge_item
+        obj1_idx = curr_edge.obj1_idx
+        obj2_idx = curr_edge.obj2_idx
+        rel_type = curr_edge.rel_type
+        num_det = curr_edge.num_detections
+        obj1_class_name = objects[obj1_idx]['class_name'] 
+        obj2_class_name = objects[obj2_idx]['class_name']
+        obj1_curr_obj_num = objects[obj1_idx]['curr_obj_num']
+        obj2_curr_obj_num = objects[obj2_idx]['curr_obj_num']
+        # print(f"Line 732, {obj1_class_name} {rel_type} {obj2_class_name}, num_det: {num_det}")
+        
+        edj_dict = {
+            "edge_id": curr_idx,
+            "edge_description": f"{obj1_class_name} {rel_type} {obj2_class_name}",
+            "num_detections": num_det,
+            "object_1_id": obj1_curr_obj_num,
+            "object_1_tag": obj1_class_name,
+            "object_2_id": obj2_curr_obj_num,
+            "object_2_tag": obj2_class_name,
+            "relationship": rel_type,
+        }
+        json_edge_list[f"edge_{curr_idx}"] = edj_dict
+        
+    json_edge_out_path = Path(exp_out_path) / f"edge_json_{exp_suffix}.json"
+    json_edge_out_path.parent.mkdir(parents=True, exist_ok=True)
+    with open(json_edge_out_path, "w") as f:
+        json.dump(json_edge_list, f, indent=2)
+    print(f"Saved edge JSON to {json_edge_out_path}")
 
 
 def save_pointcloud(exp_suffix, exp_out_path, cfg, objects, obj_classes, latest_pcd_filepath=None, create_symlink=True, edges = None):

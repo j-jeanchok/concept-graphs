@@ -291,7 +291,7 @@ def merge_obj2_into_obj1(obj1, obj2, downsample_voxel_size, dbscan_remove_noise,
     tracker.track_merge(obj1, obj2)
     
     # Attributes to be explicitly handled
-    extend_attributes = ['image_idx', 'mask_idx', 'color_path', 'class_id', 'mask', 'xyxy', 'conf', 'contain_number']
+    extend_attributes = ['image_idx', 'mask_idx', 'color_path', 'class_id', 'mask', 'xyxy', 'conf', 'contain_number', 'captions']
     add_attributes = ['num_detections', 'num_obj_in_class']
     skip_attributes = ['id', 'class_name', 'is_background', 'new_counter', 'curr_obj_num', 'inst_color']  # 'inst_color' just keeps obj1's
     custom_handled = ['pcd', 'bbox', 'clip_ft', 'text_ft', 'n_points']
@@ -302,6 +302,10 @@ def merge_obj2_into_obj1(obj1, obj2, downsample_voxel_size, dbscan_remove_noise,
     if unhandled_keys:
         raise ValueError(f"Unhandled keys detected in obj2: {unhandled_keys}. Please update the merge function to handle these attributes.")
 
+    # Custom handling for 'pcd', 'bbox', 'clip_ft', and 'text_ft'
+    n_obj1_det = obj1['num_detections']
+    n_obj2_det = obj2['num_detections']
+    
     # Process extend and add attributes
     for attr in extend_attributes:
         if attr in obj1 and attr in obj2:
@@ -311,13 +315,9 @@ def merge_obj2_into_obj1(obj1, obj2, downsample_voxel_size, dbscan_remove_noise,
         if attr in obj1 and attr in obj2:
             obj1[attr] += obj2[attr]
 
-    # Custom handling for 'pcd', 'bbox', 'clip_ft', and 'text_ft'
-    n_obj1_det = obj1['num_detections']
-    n_obj2_det = obj2['num_detections']
-    
-        # Handling 'caption'
+    # Handling 'caption'
     if 'caption' in obj1 and 'caption' in obj2:
-        n_obj1_det = obj1['num_detections']
+        # n_obj1_det = obj1['num_detections']
         for key, value in obj2['caption'].items():
             obj1['caption'][key + n_obj1_det] = value
 
@@ -794,6 +794,32 @@ def merge_objects(
         return objects, map_edges
     else:
         return objects
+    
+def filter_captions(captions, detection_class_labels):
+    # Create a dictionary to map id to the index in the captions list
+    captions_index = {item['id']: index for index, item in enumerate(captions)}
+    
+    # Initialize a new list to store the cleaned and matched captions
+    new_captions = []
+    
+    # Process each detection class label
+    for label in detection_class_labels:
+        # Split the label by spaces
+        parts = label.split()
+        # The last part is the id
+        id_str = parts[-1]
+        # The rest are the name
+        name = ' '.join(parts[:-1])
+        
+        # Check if the id exists in the captions dictionary
+        if id_str in captions_index:
+            # Add the caption from the captions list to the new list
+            new_captions.append(captions[captions_index[id_str]])
+        else:
+            # Add a new entry with a None caption
+            new_captions.append({"id": id_str, "name": name, "caption": None})
+    
+    return new_captions
 
 
 # @profile
@@ -847,17 +873,21 @@ def filter_gobs(
     # for key in gobs.keys():
     #     print(key, type(gobs[key]), len(gobs[key]))
 
-    for k in gobs.keys():
-        if isinstance(gobs[k], str) or k == "classes":  # Captions
+    for attribute in gobs.keys():
+        if isinstance(gobs[attribute], str) or attribute == "classes":  # Captions
             continue
-        if k in ['labels', 'edges', 'detection_class_labels', 'text_feats']:
+        if attribute in ['labels', 'edges', 'text_feats', 'captions']:
+            # Note: this statement was used to also exempt 'detection_class_labels' but that causes a bug. It causes the edges to be misalgined with the objects.
             continue
-        elif isinstance(gobs[k], list):
-            gobs[k] = [gobs[k][i] for i in idx_to_keep]
-        elif isinstance(gobs[k], np.ndarray):
-            gobs[k] = gobs[k][idx_to_keep]
+        elif isinstance(gobs[attribute], list):
+            gobs[attribute] = [gobs[attribute][i] for i in idx_to_keep]
+        elif isinstance(gobs[attribute], np.ndarray):
+            gobs[attribute] = gobs[attribute][idx_to_keep]
         else:
-            raise NotImplementedError(f"Unhandled type {type(gobs[k])}")
+            raise NotImplementedError(f"Unhandled type {type(gobs[attribute])}")
+        
+    filtered_captions = filter_captions(gobs['captions'], gobs['detection_class_labels'])
+    gobs['captions'] = filtered_captions
 
     return gobs
 
@@ -1065,6 +1095,7 @@ def make_detection_list_from_pcd_and_gobs(
             'color_path' : [color_path],                     # path to the RGB image
             'class_name' : curr_class_name,                         # global class id for this detection
             'class_id' : [curr_class_idx],                         # global class id for this detection
+            'captions' : [gobs['captions'][mask_idx]],           # captions for this detection
             'num_detections' : 1,                            # number of detections in this object
             'mask': [gobs['mask'][mask_idx]],
             'xyxy': [gobs['xyxy'][mask_idx]],
@@ -1338,7 +1369,7 @@ def prepare_objects_save_vis(objects: MapObjectList, downsample_size: float=0.02
                 
     return objects_to_save.to_serializable()
 
-def process_edges(match_indices, gobs, initial_objects_count, objects, map_edges):
+def process_edges(match_indices, gobs, initial_objects_count, objects, map_edges, frame_idx):
     # Step 1: Generate match_indices_w_new_obj with indices for new objects
     # Initial count of objects before processing new detections
     new_object_count = 0  # Counter for new objects
@@ -1354,22 +1385,18 @@ def process_edges(match_indices, gobs, initial_objects_count, objects, map_edges
         else:
             match_indices_w_new_obj.append(match_index)
 
-    # Step 2: Create a mapping from 2D detection labels to detection indices
-    detection_label_to_index = {label: index for index, label in enumerate(gobs['detection_class_labels'])}
+    # Step 2: Create a mapping from detection_class_labels numbers to the detection_list indices
+    detection_label_to_index = {}
+    for index, detection_class_label in enumerate(gobs['detection_class_labels']):
+        label_key = detection_class_label.split(" ")[-1]
+        detection_label_to_index[label_key] = index
     
     # Step 3: Use match_indices_w_new_obj for translating 2D edges to indices in the existing objects list
     curr_edges_3d_by_index = []
     for edge in gobs['edges']:
         obj1_label, relation, obj2_label = edge
-        obj1_index = int(obj1_label.split(" ")[-1])
-        obj2_index = int(obj2_label.split(" ")[-1])
-        
-        # check that the indices are not None
-        if (obj1_index is None) or (obj2_index is None):
-            k=1
-            # sometimes gpt4v returns a relation with a class that is not in the detections
-            continue
-        
+        obj1_index = detection_label_to_index.get(obj1_label, None)
+        obj2_index = detection_label_to_index.get(obj2_label, None)        
         
         # check that the object indices are not out of range
         if (obj1_index is None) or (obj1_index >= len(match_indices_w_new_obj)):
@@ -1392,7 +1419,7 @@ def process_edges(match_indices, gobs, initial_objects_count, objects, map_edges
     for (obj_1_idx, rel_type, obj_2_idx) in curr_edges_3d_by_index:
         if obj_1_idx == obj_2_idx: # skip loop edges
             continue
-        map_edges.add_or_update_edge(obj_1_idx, obj_2_idx, rel_type)
+        map_edges.add_or_update_edge(obj_1_idx, obj_2_idx, rel_type, frame_idx)
         
     # Just making a copy of the edges by object number for viz
     map_edges_by_curr_obj_num = []
