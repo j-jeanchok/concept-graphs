@@ -1,0 +1,7 @@
+defaults:
+  - base_paths
+  
+dataset_root: ${data_root}/realsense
+scene_id: custom_dataset
+dataset_config: ${repo_root}/conceptgraph/dataset/dataconfigs/realsense/manipulator_config.yaml
+render_camera_path: ${repo_root}/conceptgraph/dataset/dataconfigs/realsense/realsense_camera.json
