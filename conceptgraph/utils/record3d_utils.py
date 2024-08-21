@@ -37,8 +37,7 @@ class DemoApp:
             print('\tID: {}\n\tUDID: {}\n'.format(dev.product_id, dev.udid))
 
         if len(devs) <= dev_idx:
-            raise RuntimeError('Cannot connect to device #{}, try different index.'
-                               .format(dev_idx))
+            raise RuntimeError('Cannot connect to device #{}, try different index.'.format(dev_idx))
 
         dev = devs[dev_idx]
         self.session = Record3DStream()
@@ -47,9 +46,10 @@ class DemoApp:
         self.session.connect(dev)  # Initiate connection and start capturing
 
     def get_intrinsic_mat_from_coeffs(self, coeffs):
-        return np.array([[coeffs.fx,         0, coeffs.tx],
-                         [        0, coeffs.fy, coeffs.ty],
-                         [        0,         0,         1]])
+        return np.array([
+            [coeffs.fx,         0, coeffs.tx],
+            [        0, coeffs.fy, coeffs.ty],
+            [        0,         0,         1]])
         
     def correct_pose(self, transformation_matrix):
         '''
@@ -86,7 +86,7 @@ class DemoApp:
 
             # You can now e.g. create point cloud by projecting the depth map using the intrinsic matrix.
             
-             # Postprocess it
+            # Postprocess it
             if self.session.get_device_type() == self.DEVICE_TYPE__TRUEDEPTH:
                 depth = cv2.flip(depth, 1)
                 rgb = cv2.flip(rgb, 1)
@@ -113,7 +113,6 @@ class DemoApp:
             # transformation_matrix[1, 3] *= -1  # Negate the y-component in the translation vector
             
             final_transformation = self.correct_pose(transformation_matrix)
- 
 
             # Convert back to numpy if necessary
             final_transformation_matrix = final_transformation.numpy()
