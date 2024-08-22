@@ -1,9 +1,9 @@
 camera_params:
-  cx: 240
-  cy: 320
+  cx: 320
+  cy: 240
   fx: 605.63586426
   fy: 605.63360596
-  image_height: 640
-  image_width: 480
+  image_height: 480
+  image_width: 640
   png_depth_scale: 1000.0
 dataset_name: realsense
