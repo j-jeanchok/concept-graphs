@@ -398,7 +398,7 @@ def filter_detections(
 
     return filtered_detections, filtered_labels
 
-def get_vlm_annotated_image_path(det_exp_vis_path, color_path, w_edges=False, suffix="annotated_for_vlm.jpg", ):
+def get_vlm_annotated_image_path(det_exp_vis_path, color_path, w_edges=False, suffix="_annotated_for_vlm.jpg", ):
 
     # Define suffixes based on whether edges are included
     if w_edges:
@@ -441,7 +441,7 @@ def make_vlm_edges_and_captions(image, curr_det, obj_classes, detection_class_la
         confidence_threshold=0.00001,
         given_labels=detection_class_labels,
     )
-    
+    captions = ""
     edges = []
     edge_image = None
     if make_edges_flag:
