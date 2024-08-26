@@ -17,7 +17,7 @@ from ultralytics import SAM
 import supervision as sv
 import open_clip
 
-from conceptgraph.utils.realsense import RealSenseApp 
+from conceptgraph.realsense.realsense import RealSenseApp 
 from conceptgraph.utils.vis import vis_result_fast, save_video_detections
 from conceptgraph.utils.general_utils import (
     get_det_out_path, 
@@ -169,7 +169,7 @@ def main(cfg : DictConfig):
         # save the detections
         vis_save_path = (det_exp_vis_path / Path(color_path).name).with_suffix(".jpg")
 
-        #Visualize and save the annotated image
+        # Visualize and save the annotated image
         annotated_image, labels = vis_result_fast(image_rgb, curr_det, obj_classes.get_classes_arr())
         cv2.imwrite(str(vis_save_path), annotated_image)
         curr_detection_name = (vis_save_path.stem + ".pkl.gz")

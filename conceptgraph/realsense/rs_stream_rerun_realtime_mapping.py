@@ -5,7 +5,7 @@ import pickle
 import gzip
 
 # ===== Third-party Imports ===== #
-from conceptgraph.utils.realsense import RealSenseApp 
+from conceptgraph.realsense.realsense import RealSenseApp 
 import cv2 
 import numpy as np 
 # import scipy.ndimage as ndi 
