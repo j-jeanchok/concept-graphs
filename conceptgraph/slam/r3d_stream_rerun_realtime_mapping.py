@@ -18,7 +18,7 @@ import scipy.ndimage as ndi
 import torch
 from PIL import Image
 from tqdm import trange
-from open3d.io import read_pinhole_camera_parameters
+import open3d as o3d
 import hydra
 from omegaconf import DictConfig
 import open_clip
@@ -118,8 +118,7 @@ def main(cfg : DictConfig):
     owandb.set_use_wandb(cfg.use_wandb)
     owandb.init(project="concept-graphs", 
             #    entity="concept-graphs",
-                config=cfg_to_dict(cfg),
-               )
+                config=cfg_to_dict(cfg))
     cfg = process_cfg(cfg)
 
 
@@ -128,7 +127,7 @@ def main(cfg : DictConfig):
 
     # For visualization
     if cfg.vis_render:
-        view_param = read_pinhole_camera_parameters(cfg.render_camera_path)
+        view_param = o3d.io.read_pinhole_camera_parameters(cfg.render_camera_path)
         obj_renderer = OnlineObjectRenderer(
             view_param = view_param,
             base_objects = None, 
@@ -164,7 +163,8 @@ def main(cfg : DictConfig):
 
         ## Initialize the detection models
         detection_model = measure_time(YOLO)('yolov8l-world.pt')
-        sam_predictor = SAM('sam_l.pt') # SAM('mobile_sam.pt') # UltraLytics SAM
+        # sam_predictor = SAM('sam_l.pt') # SAM('mobile_sam.pt') # UltraLytics SAM
+        sam_predictor = SAM('mobile_sam.pt')
         # sam_predictor = measure_time(get_sam_predictor)(cfg) # Normal SAM
         clip_model, _, clip_preprocess = open_clip.create_model_and_transforms(
             "ViT-H-14", "laion2b_s32b_b79k"
@@ -279,7 +279,7 @@ def main(cfg : DictConfig):
             )
             
             # No edges during streaming for now
-            labels, edges, edge_image = make_vlm_edges(image, curr_det, obj_classes, detection_class_labels, det_exp_vis_path, color_path, make_edges_flag=False, openai_client=openai_client)
+            labels, edges, _, _ = make_vlm_edges_and_captions(image, curr_det, obj_classes, detection_class_labels, det_exp_vis_path, color_path, make_edges_flag=False, openai_client=openai_client)
             
             image_crops, image_feats, text_feats = compute_clip_features_batched(
                 image_rgb, curr_det, clip_model, clip_preprocess, clip_tokenizer, obj_classes.get_classes_arr(), cfg.device)
