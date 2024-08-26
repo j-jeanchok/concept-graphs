@@ -17,3 +17,4 @@ save_video: false
 device: cuda
 use_slow_vis: false
 exp_suffix: _exp_label
+exit_early_file: ${repo_root}/conceptgraph/hydra_configs/early_exit.json
