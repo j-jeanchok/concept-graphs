@@ -17,7 +17,7 @@ import scipy.ndimage as ndi
 import torch
 from PIL import Image
 from tqdm import trange
-from open3d.io import read_pinhole_camera_parameters
+import open3d as o3d
 import hydra
 from omegaconf import DictConfig
 import open_clip
@@ -116,8 +116,7 @@ def main(cfg : DictConfig):
     owandb.set_use_wandb(cfg.use_wandb)
     owandb.init(project="concept-graphs", 
             #    entity="concept-graphs",
-                config=cfg_to_dict(cfg),
-               )
+                config=cfg_to_dict(cfg),)
     cfg = process_cfg(cfg)
 
     # Initialize the dataset
@@ -140,7 +139,7 @@ def main(cfg : DictConfig):
 
     # For visualization
     if cfg.vis_render:
-        view_param = read_pinhole_camera_parameters(cfg.render_camera_path)
+        view_param = o3d.io.read_pinhole_camera_parameters(cfg.render_camera_path)
         obj_renderer = OnlineObjectRenderer(
             view_param = view_param,
             base_objects = None, 
@@ -174,7 +173,8 @@ def main(cfg : DictConfig):
 
         ## Initialize the detection models
         detection_model = measure_time(YOLO)('yolov8l-world.pt')
-        sam_predictor = SAM('sam_l.pt') # SAM('mobile_sam.pt') # UltraLytics SAM
+        # sam_predictor = SAM('sam_l.pt') 
+        sam_predictor = SAM('mobile_sam.pt') # UltraLytics SAM
         # sam_predictor = measure_time(get_sam_predictor)(cfg) # Normal SAM
         clip_model, _, clip_preprocess = open_clip.create_model_and_transforms(
             "ViT-H-14", "laion2b_s32b_b79k"
@@ -269,7 +269,8 @@ def main(cfg : DictConfig):
             )
             
             # Make the edges
-            labels, edges, edge_image, captions = make_vlm_edges_and_captions(image, curr_det, obj_classes, detection_class_labels, det_exp_vis_path, color_path, cfg.make_edges, openai_client)
+            labels, edges, _, captions = make_vlm_edges_and_captions(image, curr_det, obj_classes, detection_class_labels, det_exp_vis_path, color_path, cfg.make_edges, openai_client)
+            # labels, edges, edge_image, captions = make_vlm_edges_and_captions(image, curr_det, obj_classes, detection_class_labels, det_exp_vis_path, color_path, True, None)
 
             image_crops, image_feats, text_feats = compute_clip_features_batched(
                 image_rgb, curr_det, clip_model, clip_preprocess, clip_tokenizer, obj_classes.get_classes_arr(), cfg.device)
@@ -316,11 +317,11 @@ def main(cfg : DictConfig):
             # Support current and old saving formats
             if os.path.exists(det_exp_pkl_path / color_path.stem):
                 raw_gobs = load_saved_detections(det_exp_pkl_path / color_path.stem)
-            elif os.path.exists(det_exp_pkl_path / f"{int(color_path.stem):06}"):
-                raw_gobs = load_saved_detections(det_exp_pkl_path / f"{int(color_path.stem):06}")
+            elif os.path.exists(det_exp_pkl_path / f"{int(color_path.stem[-6:]):06}"):
+                raw_gobs = load_saved_detections(det_exp_pkl_path / f"{int(color_path.stem[-6:]):06}")
             else:
                 # if no detections, throw an error
-                raise FileNotFoundError(f"No detections found for frame {frame_idx}at paths \n{det_exp_pkl_path / color_path.stem} or \n{det_exp_pkl_path / f'{int(color_path.stem):06}'}.")
+                raise FileNotFoundError(f"No detections found for frame {frame_idx}at paths \n{det_exp_pkl_path / color_path.stem} or \n{det_exp_pkl_path / f'{int(color_path.stem[-6:]):06}'}.")
 
         # get pose, this is the untrasformed pose.
         unt_pose = dataset.poses[frame_idx]
