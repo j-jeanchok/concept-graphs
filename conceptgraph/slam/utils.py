@@ -19,7 +19,7 @@ import torch.nn.functional as F
 import faiss
 import uuid
 
-from conceptgraph.slam.slam_classes import MapEdgeMapping, MapObjectList, DetectionList, to_tensor
+from conceptgraph.slam.slam_classes import MapEdgeMapping, MapObjectList, DetectionList, to_tensor, to_numpy
 
 from conceptgraph.utils.ious import compute_3d_iou, compute_3d_iou_accurate_batch, compute_iou_batch
 
