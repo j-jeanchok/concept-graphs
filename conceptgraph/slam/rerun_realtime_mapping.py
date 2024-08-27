@@ -4,8 +4,6 @@ The script is used to model Grounded SAM detections in 3D, it assumes the tag2te
 
 # Standard library imports
 import os
-import copy
-import uuid
 from pathlib import Path
 import pickle
 import gzip
@@ -13,7 +11,6 @@ import gzip
 # Third-party imports
 import cv2
 import numpy as np
-import scipy.ndimage as ndi
 import torch
 from PIL import Image
 from tqdm import trange
@@ -37,19 +34,23 @@ from conceptgraph.utils.optional_rerun_wrapper import (
     orr_log_vlm_image
 )
 from conceptgraph.utils.optional_wandb_wrapper import OptionalWandB
-from conceptgraph.utils.geometry import rotation_matrix_to_quaternion
+# from conceptgraph.utils.geometry import rotation_matrix_to_quaternion
 from conceptgraph.utils.logging_metrics import DenoisingTracker, MappingTracker
-from conceptgraph.utils.vlm import consolidate_captions, get_obj_rel_from_image_gpt4v, get_openai_client
+from conceptgraph.utils.vlm import (
+    consolidate_captions, 
+    # get_obj_rel_from_image_gpt4v, 
+    get_openai_client
+)
 from conceptgraph.utils.ious import mask_subtract_contained
 from conceptgraph.utils.general_utils import (
     ObjectClasses, 
-    find_existing_image_path, 
+    # find_existing_image_path, 
     get_det_out_path, 
     get_exp_out_path, 
     get_vlm_annotated_image_path, 
     handle_rerun_saving, 
     load_saved_detections, 
-    load_saved_hydra_json_config, 
+    # load_saved_hydra_json_config, 
     make_vlm_edges_and_captions, 
     measure_time, 
     save_detection_results,
@@ -64,9 +65,9 @@ from conceptgraph.utils.general_utils import (
 from conceptgraph.dataset.datasets_common import get_dataset
 from conceptgraph.utils.vis import (
     OnlineObjectRenderer, 
-    save_video_from_frames, 
+    # save_video_from_frames, 
     vis_result_fast_on_depth, 
-    vis_result_for_vlm, 
+    # vis_result_for_vlm, 
     vis_result_fast, 
     save_video_detections
 )
@@ -80,10 +81,10 @@ from conceptgraph.slam.utils import (
     denoise_objects,
     merge_objects, 
     detections_to_obj_pcd_and_bbox,
-    prepare_objects_save_vis,
+    # prepare_objects_save_vis,
     process_cfg,
     process_edges,
-    process_pcd,
+    # process_pcd,
     processing_needed,
     resize_gobs
 )
@@ -199,7 +200,10 @@ def main(cfg : DictConfig):
 
     exit_early_flag = False
     counter = 0
+
     for frame_idx in trange(len(dataset)):
+        torch.cuda.empty_cache() 
+
         tracker.curr_frame_idx = frame_idx
         counter+=1
         orr.set_time_sequence("frame", frame_idx)
