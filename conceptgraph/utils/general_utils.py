@@ -346,7 +346,7 @@ def filter_detections(
         curr_area = (curr_xyxy[2] - curr_xyxy[0]) * (curr_xyxy[3] - curr_xyxy[1])
         keep = True
         
-            # Calculate the total number of pixels as a threshold for small masks
+        # Calculate the total number of pixels as a threshold for small masks
         total_pixels = image.shape[0] * image.shape[1]
         small_mask_size = total_pixels * min_mask_size_ratio
 
@@ -384,17 +384,23 @@ def filter_detections(
         if keep:
             filtered_detections.append(current_det)
 
-    # Unzip the filtered results
-    confidences, class_ids, xyxy, masks, indices = zip(*filtered_detections)
-    filtered_labels = [given_labels[i] for i in indices]
+    # Accounting for the case when there is no detection in the image
+    if len(filtered_detections) != 0:
+        # Unzip the filtered results
+        confidences, class_ids, xyxy, masks, indices = zip(*filtered_detections)
+        filtered_labels = [given_labels[i] for i in indices]
 
-    # Create new detections object
-    filtered_detections = sv.Detections(
-        class_id=np.array(class_ids, dtype=np.int64),
-        confidence=np.array(confidences, dtype=np.float32),
-        xyxy=np.array(xyxy, dtype=np.float32),
-        mask=np.array(masks, dtype=np.bool_)
-    )
+        # Create new detections object
+        filtered_detections = sv.Detections(
+            class_id=np.array(class_ids, dtype=np.int64),
+            confidence=np.array(confidences, dtype=np.float32),
+            xyxy=np.array(xyxy, dtype=np.float32),
+            mask=np.array(masks, dtype=np.bool_)
+        )
+    else:
+        # No filter 
+        filtered_detections = detections 
+        filtered_labels = given_labels
 
     return filtered_detections, filtered_labels
 
