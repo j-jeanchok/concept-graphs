@@ -44,7 +44,10 @@ pip install faiss-cpu==1.8.0.post1
 ## Install PyTorch3D (stable version)
 pip install "git+https://github.com/facebookresearch/pytorch3d.git@stable"
 
-## CUDA Toolkit: This is a problematic step without using conda. I am not sure if there are any packages required CUDA other than PyTorch , however, if only PyTorch requires, the binary PyTorch package installed above has already included its CUDA environment. 
+## CUDA Toolkit: This is a problematic step without using conda. Since I have CUDA Toolkit installed before, I am not sure if there are any packages
+# required CUDA other than PyTorch,
+# however, if only PyTorch requires, the binary PyTorch package installed above has already included its CUDA environment. If required,
+# please follow the instruction on [Offical Website][https://developer.nvidia.com/cuda-12-4-0-download-archive?target_os=Linux&target_arch=x86_64&Distribution=Ubuntu&target_version=22.04]
 
 ## Install the other required libraries (with version used)
 pip install dill==0.3.8 distinctipy==1.3.4 h5py==3.11.0 hydra-core==1.3.2 imageio==2.34.2 kornia==0.7.3 natsort==8.4.0 open3d==0.18.0 open_clip_torch==2.26.1 openai==1.37.1 pyliblzfse==0.4.1 pypng==0.20220715.0 rerun-sdk==0.17.0 supervision==0.22.0 tyro==0.8.5 ultralytics==8.2.66 wandb==0.17.5
