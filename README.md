@@ -410,7 +410,7 @@ python realsense/rs_stream_rerun_realtime_mapping.py
 to do the same as in 5.3.4. However, due the rendering process, this program requires a large computational resource. 
 
 
-### Rendering boolean variables
+### 6. Boolean variables for rendering
 
 - make_edges: `True` will generate the edge between two objects. `False` otherwise
 - save_video: Save a video recording the detection/mapping procedure for each frame. 
