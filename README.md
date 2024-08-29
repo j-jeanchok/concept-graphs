@@ -38,15 +38,16 @@ source conceptgraph/bin/activate
 ## Install PyTorch 
 pip install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu124
 
-## Install the Faiss library (CPU version should be fine), this is used for quick indexing of pointclouds for duplicate object matching and merging
+## Install the Faiss library (CPU version should be fine), this is used for quick indexing of pointclouds for
+# duplicate object matching and merging
 pip install faiss-cpu==1.8.0.post1
 
 ## Install PyTorch3D (stable version)
 pip install "git+https://github.com/facebookresearch/pytorch3d.git@stable"
 
-## CUDA Toolkit: This is a problematic step without using conda. Since I have CUDA Toolkit installed before, I am not sure if there are any packages
-# required CUDA other than PyTorch,
-# however, if only PyTorch requires, the binary PyTorch package installed above has already included its CUDA environment. If required,
+## CUDA Toolkit: This is a problematic step without using conda. Since I have CUDA Toolkit installed before, I am not
+# sure if there are any packages required CUDA other than PyTorch, however, if only PyTorch requires, the binary
+# PyTorch package installed above has already included its CUDA environment. If required,
 # please follow the instruction on [Offical Website][https://developer.nvidia.com/cuda-12-4-0-download-archive?target_os=Linux&target_arch=x86_64&Distribution=Ubuntu&target_version=22.04]
 
 ## Install the other required libraries (with version used)
