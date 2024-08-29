@@ -1,22 +1,21 @@
 # ===== Standard Library Imports ===== # 
-import cv2
-# import os
 from pathlib import Path
 import gzip
 import pickle
 
 # ===== Third-party Imports ===== #
+import cv2
 import numpy as np
 from tqdm import trange
 import hydra
 from omegaconf import DictConfig
 import torch
 
-from ultralytics import YOLO
-from ultralytics import SAM
+from ultralytics import YOLO, SAM
 import supervision as sv
 import open_clip
 
+# ===== Local application/library scpecific imports ===== #
 from conceptgraph.realsense.realsense import RealSenseApp 
 from conceptgraph.utils.vis import vis_result_fast, save_video_detections
 from conceptgraph.utils.general_utils import (
@@ -121,7 +120,10 @@ def main(cfg : DictConfig):
 
         confidences = results[0].boxes.conf.cpu().numpy()
         detection_class_ids = results[0].boxes.cls.cpu().numpy().astype(int)
-        detection_class_labels = [f"{obj_classes.get_classes_arr()[class_id]} {class_idx}" for class_idx, class_id in enumerate(detection_class_ids)]
+        detection_class_labels = [
+            f"{obj_classes.get_classes_arr()[class_id]} {class_idx}" 
+            for class_idx, class_id in enumerate(detection_class_ids)
+        ]
         xyxy_tensor = results[0].boxes.xyxy
         xyxy_np = xyxy_tensor.cpu().numpy()
         
