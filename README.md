@@ -72,7 +72,7 @@ git checkout ali-dev
 pip install -e .
 ```
 
-**Note:** In some case, an error will occur when building h5py package `ERROR: could not build wheels for h5py, which is required to install pyproject.toml-based projects`. This error occurs because there is no pre-built package for ARM or ARCH OS yet, so pip is trying to build h5py from source and it fails to find HDF5. If you encounter this issue, run the following command: 
+**Note:** In some case, an error will occur when building h5py package `ERROR: could not build wheels for h5py, which is required to install pyproject.toml-based projects`. This error occurs because there is no pre-built package for ARM or AARCH OS yet, so pip is trying to build h5py from source and it fails to find HDF5. If you encounter this issue, run the following command: 
 
 ```bash 
 sudo apt install python3-dev libhdf5-dev 
