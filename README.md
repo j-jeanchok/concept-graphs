@@ -60,7 +60,7 @@ pip install git+https://github.com/ultralytics/CLIP.git
 # You can do this by setting the CUDA_HOME environment variable.
 # You can manually set it to the python environment you are using, or set it to the conda prefix of the environment.
 # for me its export CUDA_HOME=/home/kirinhuang/Documents/Code/Python/concept-graphs/conceptgraph
-export CUDA_HOME=/path/to/virtual/environment/conceptgraph
+export CUDA_HOME=/home/delta-agx-orin/concept-graphs/conceptgraph
 
 ## Finally install conceptgraphs
 cd /path/to/code/ # wherever you want to install conceptgraphs
