@@ -36,6 +36,7 @@ python3 -m venv conceptgraph
 source conceptgraph/bin/activate 
 
 ## Install PyTorch 
+# For Jetson platform, please install PyTorch as instructed here: https://forums.developer.nvidia.com/t/pytorch-for-jetson/72048
 pip install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu124
 
 ## Install the Faiss library (CPU version should be fine), this is used for quick indexing of pointclouds for
@@ -70,6 +71,15 @@ cd concept-graphs
 git checkout ali-dev
 pip install -e .
 ```
+
+**Note:** In some case, an error will occur when building h5py package `ERROR: could not build wheels for h5py, which is required to install pyproject.toml-based projects`. This error occurs because there is no pre-built package for ARM or ARCH OS yet, so pip is trying to build h5py from source and it fails to find HDF5. If you encounter this issue, run the following command: 
+
+```bash 
+sudo apt install python3-dev libhdf5-dev 
+pip install cython 
+pip install h5py==3.11.0
+```
+
 
 ## 2. Datasets 
 
