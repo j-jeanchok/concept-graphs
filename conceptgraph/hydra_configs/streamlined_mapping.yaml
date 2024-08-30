@@ -13,10 +13,10 @@ defaults:
 # hydra:
 #   verbose : true
 
-detections_exp_suffix: s_detections_stride5_1 # s_detections_stride1_3 # s_detections_stride50_2 # exp_s_detections_stride50_yes_bg_44_mr
+detections_exp_suffix: s_detections_stride1_1 # s_detections_stride1_3 # s_detections_stride50_2 # exp_s_detections_stride50_yes_bg_44_mr
 make_edges: !!bool True
 stride: 1
-exp_suffix: s_mapping_stride5_1
+exp_suffix: s_mapping_stride1_1
 save_video: !!bool True
 save_objects_all_frames: !!bool True
 vis_render: !!bool False

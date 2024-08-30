@@ -98,9 +98,10 @@ Do not include any additional information in your response.
 '''
 
 system_prompt = system_prompt_only_top
+# system_prompt = system_prompt_1 
 
 # gpt_model = "gpt-4-vision-preview"
-gpt_model = "gpt-4o-2024-05-13"
+gpt_model = "gpt-4o-mini"
 
 def get_openai_client():
     client = OpenAI(
@@ -270,6 +271,7 @@ def get_obj_rel_from_image_gpt4v(client: OpenAI, image_path: str, label_list: li
                 {
                     "role": "system",
                     "content": system_prompt_only_top
+                    # "content": system_prompt_1
                 },
                 {
                     "role": "user",
