@@ -25,6 +25,7 @@ from conceptgraph.utils.general_utils import (
     make_vlm_edges_and_captions,
     measure_time, 
     save_hydra_config, 
+    should_exit_early,
     ObjectClasses
 )
 from conceptgraph.utils.model_utils import compute_clip_features_batched 
@@ -83,7 +84,18 @@ def main(cfg : DictConfig):
     
     save_hydra_config(cfg, det_exp_path)
 
+    exit_early_flag = False 
+
     for frame_idx in trange(len(dataset)):
+
+        # Check if we should exit early only if the flag hasn't been set yet
+        if not exit_early_flag and should_exit_early(cfg.exit_early_file):
+            print("Exit early signal detected. Skipping to the final frame...")
+            exit_early_flag = True
+
+        # If exit early flag is set and we're not at the last frame, skip this iteration
+        if exit_early_flag and frame_idx < len(dataset) - 1:
+            continue
 
         # Relevant paths and load image
         color_path = Path(dataset.color_paths[frame_idx])
