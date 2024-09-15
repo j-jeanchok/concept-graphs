@@ -16,11 +16,12 @@ import supervision as sv
 import open_clip
 
 # ===== Local application/library scpecific imports ===== #
-from conceptgraph.dataset.datasets_common import get_dataset
+from conceptgraph.realsense.realsense import RealSenseApp 
 from conceptgraph.utils.vis import vis_result_fast, save_video_detections
 from conceptgraph.utils.general_utils import (
     get_det_out_path, 
     get_exp_out_path, 
+    get_stream_data_out_path, 
     get_vis_out_path, 
     make_vlm_edges_and_captions,
     measure_time, 
@@ -39,19 +40,7 @@ from conceptgraph.utils.vlm import get_openai_client
 
 def main(cfg : DictConfig):
 
-    # Initialize the dataset
-    dataset = get_dataset(
-        dataconfig=cfg.dataset_config,
-        start=cfg.start,
-        end=cfg.end,
-        stride=cfg.stride,
-        basedir=cfg.dataset_root,
-        sequence=cfg.scene_id,
-        desired_height=cfg.desired_height,
-        desired_width=cfg.desired_width,
-        device="cpu",
-        dtype=torch.float,
-    )
+    app = RealSenseApp() 
 
     # Output folder of the detections experiment to use
     det_exp_path = get_exp_out_path(
@@ -60,6 +49,11 @@ def main(cfg : DictConfig):
         exp_suffix=cfg.exp_suffix)
     det_exp_pkl_path = get_det_out_path(det_exp_path)
     det_exp_vis_path = get_vis_out_path(det_exp_path)
+
+    stream_rgb_path, stream_depth_path, stream_poses_path = get_stream_data_out_path(
+        dataset_root=cfg.dataset_root, 
+        scene_id=cfg.scene_id,
+        make_dir=True)
 
     ## Initialize the detection models
     detection_model = YOLO('yolov8l-world.pt')
@@ -84,9 +78,13 @@ def main(cfg : DictConfig):
     
     save_hydra_config(cfg, det_exp_path)
 
-    exit_early_flag = False 
+    ## Looping for frames 
+    exit_early_flag = False
+    total_frames = 100
 
-    for frame_idx in trange(len(dataset)):
+    for frame_idx in trange(total_frames):
+
+        torch.cuda.empty_cache()
 
         # Check if we should exit early only if the flag hasn't been set yet
         if not exit_early_flag and should_exit_early(cfg.exit_early_file):
@@ -94,14 +92,28 @@ def main(cfg : DictConfig):
             exit_early_flag = True
 
         # If exit early flag is set and we're not at the last frame, skip this iteration
-        if exit_early_flag and frame_idx < len(dataset) - 1:
+        if exit_early_flag and frame_idx < total_frames - 1:
             continue
 
-        # Relevant paths and load image
-        color_path = Path(dataset.color_paths[frame_idx])
-        # opencv can't read Path objects...
-        image = cv2.imread(str(color_path)) # This will in BGR color space
-        image_rgb = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
+        # Get the frame data
+        s_rgb, s_depth, _, s_camera_pose = app.get_frame_data()
+        image_rgb = cv2.cvtColor(s_rgb, cv2.COLOR_BGR2RGB)
+
+        # Save the rgb to the stream folder with an appropriate name
+        color_path = stream_rgb_path / f"{frame_idx}.jpg"
+        cv2.imwrite(str(color_path), s_rgb)
+
+        # Save depth to the stream folder with an appropriate name
+        # s_depth = cv2.applyColorMap(
+        #     cv2.convertScaleAbs(s_depth, alpha=0.03),
+        #     cv2.COLORMAP_JET)
+        curr_stream_depth_path = stream_depth_path / f"{frame_idx}.png"
+        cv2.imwrite(str(curr_stream_depth_path), s_depth)
+        
+        # Save the camera pose to the stream folder with an appropriate name 
+        curr_stream_pose_path = stream_poses_path / f"{frame_idx}"
+        np.save(str(curr_stream_pose_path), s_camera_pose)
+        
 
         # Do initial object detection
         results = detection_model(image_rgb)
@@ -129,7 +141,7 @@ def main(cfg : DictConfig):
             class_id=detection_class_ids,
             mask=masks_np,
         )
-        
+
         ## Extract edges and captions from OpenAI API
         labels, edges, _, captions = make_vlm_edges_and_captions(image_rgb, curr_det, obj_classes, detection_class_labels, det_exp_vis_path, color_path, make_edges_flag=True, openai_client=openai_client)
         
@@ -159,8 +171,8 @@ def main(cfg : DictConfig):
         # save the detections
         vis_save_path = (det_exp_vis_path / Path(color_path).name).with_suffix(".jpg")
 
-        #Visualize and save the annotated image
-        annotated_image, labels = vis_result_fast(image, curr_det, obj_classes.get_classes_arr())
+        # Visualize and save the annotated image
+        annotated_image, labels = vis_result_fast(image_rgb, curr_det, obj_classes.get_classes_arr())
         cv2.imwrite(str(vis_save_path), annotated_image)
         curr_detection_name = (vis_save_path.stem + ".pkl.gz")
         with gzip.open(det_exp_pkl_path / curr_detection_name , "wb") as f:

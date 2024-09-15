@@ -1,4 +1,7 @@
 
+**NOTE:** Please check the `README_Origin.md` for the original instruction. This file modifies the original one and adds more detailed explanation to ensure other people can follow more easily.  
+
+
 # ConceptGraphs: Open-Vocabulary 3D Scene Graphs for Perception and Planning
 
 This repository contains the code for the ConceptGraphs project. ConceptGraphs builds open-vocabulary 3D scenegraphs that enable a broad range of perception and task planning capabilities.
@@ -9,190 +12,79 @@ This repository contains the code for the ConceptGraphs project. ConceptGraphs b
 [**Video**](https://www.youtube.com/watch?v=mRhNkQwRYnc&feature=youtu.be&ab_channel=AliK)
 
 
-[Qiao Gu](https://georgegu1997.github.io/)\*,
-[Ali Kuwajerwala](https://www.alihkw.com/)\*,
-[Sacha Morin](https://sachamorin.github.io/)\*,
-[Krishna Murthy Jatavallabhula](https://krrish94.github.io/)\*,
-[Bipasha Sen](https://bipashasen.github.io/),
-[Aditya Agarwal](https://skymanaditya1.github.io/),
-[Corban Rivera](https://www.jhuapl.edu/work/our-organization/research-and-exploratory-development/red-staff-directory/corban-rivera),
-[William Paul](https://scholar.google.com/citations?user=92bmh84AAAAJ),
-[Kirsty Ellis](https://mila.quebec/en/person/kirsty-ellis/),
-[Rama Chellappa](https://engineering.jhu.edu/faculty/rama-chellappa/),
-[Chuang Gan](https://people.csail.mit.edu/ganchuang/),
-[Celso Miguel de Melo](https://celsodemelo.net/),
-[Joshua B. Tenenbaum](http://web.mit.edu/cocosci/josh.html),
-[Antonio Torralba](https://groups.csail.mit.edu/vision/torralbalab/),
-[Florian Shkurti](http://www.cs.toronto.edu//~florian/),
-[Liam Paull](http://liampaull.ca/)
-
-![Splash Figure](./assets/splash-final.png)
-
-## Getting Started Video Tutorial 
-
-This 1.5 hours long Youtube video is detailed getting started tutorial covering the README below as of May 7, 2024. In it, I start with a blank ubuntu 20.04, and setup ConceptGraphs, and make a map using the replica dataset and an iPhone scan. Also covers the direct streaming option! I decided to be extra detailed just in case, so feel free to skip over / through the parts that are too slow for you.
-
-[![IMAGE ALT TEXT HERE](https://img.youtube.com/vi/56jEFyrqqpo/0.jpg)](https://www.youtube.com/watch?v=56jEFyrqqpo)
-
-<details >
-<summary>Video Chapters (Dropdown) </summary>
-<br>
-  
-0:00 Welcome Introduction
-
-1:09 Tutorial Starts
-
-1:58 Download Dataset
-
-3:17 Conda Env Setup Starts
-
-9:32 Setting CUDA_HOME env variable
-
-14:18 Install ali-dev ConceptGraphs into conda env
-
-16:39 Build map w Replica Dataset starts
-
-18:38 Weird Indent Error
-
-19:27 Config Setup and Related Errors Explanation starts
-
-21:13 Hydra Config Composition explained
-
-25:00 Setting repo_root and data_root in base_paths YAML
-
-27:25 Initial Overview of mapping script
-
-29:02 Changing SAM to MobileSAM
-
-30:27 Commenting out openai api for now
-
-31:48 Overview of changes so far
-
-32:09 Initial look at Rerun window
-
-33:44 Overview of changes so far part 2
-
-35:01 Stopping the map building early explained
-
-35:32 Saving the Rerun data
-
-37:52 Saving the map
-
-38:33 last_pcd_save Symbolic Link Explained
-
-39:42 Exploring the Finished Experiment Folder
-
-42:40 Saved param file for the Experiment
-
-45:00 Searching the map with natural language queries
-
-48:42 Overview of changes so far part 3
-
-50:10 Reusing detections
-
-52:21 Showing off Rerun Visualization features
-
-54:43 Incomplete Dataset Reuse Issue
-
-55:38 Summary and Recap So far
-
-56:19 Using an iPhone as RGB-D sensor starts
-
-56:46 Record3D app explained
-
-57:49 Setting up and extracting r3d file dataset
-
-59:31 Preprocessing extracted r3d dataset 
-
-1:01:42 Missing dependencies fix 
-
-1:04:31 Building and saving  map with iPhone dataset
-
-1:09:41 Searching the co_store map with natural language queries
-
-1:10:56 Streaming data directly from iPhone explanation starts 
-
-1:14:10 Installing record3D git repo and cmake
-
-1:18:29 setting up OpenAI API key env variable  
-
-1:20:03 Streaming directly from iPhone working 
-
-1:22:21 Searching the streamed iPhone map with natural language queries
-
-1:23:41 Edges explanation starts
-
-1:24:58 Building a map with edges and using the VSCode Debugger starts
-
-1:25:22 Explaining the VSCode launch.json debug config
-
-1:27:21 Building a map with Edges
-
-1:29:17 Summary and recap of video and changes so far
-
-1:30:28 High level overview of main mapping script
-
-1:35:19 How to use the VSCode debugger
-
-1:37:12 Summary and recap of video and changes so far part 2
-
-1:37:49 Outro and goodbye
-
-</details>
-
-
-## Installation
-
-### Code
-
-ConceptGraphs is built using Python. We recommend using [Anaconda](https://www.anaconda.com/download) to manage your python environment. It creates a separate environment for each project, which is useful for managing dependencies and ensuring that you don't have conflicting versions of packages from other projects.
-
-**NOTE:** Sometimes certain versions of ubuntu/windows, python, pytorch and cuda may not work well together. Unfortunately this means you may need to do some trial and error to get everything working. We have included the versions of the packages we used on our machines, which ran Ubuntu 20.04.
-
-To create your python environment, run the following commands:
-
-```bash
-# Create the conda environment
-conda create -n conceptgraph python=3.10
-conda activate conceptgraph
-
-##### Install Pytorch according to your own setup #####
-# For example, if you have a GPU with CUDA 11.8 (We tested it Pytorch 2.0.1)
-conda install pytorch==2.0.1 torchvision==0.15.2 torchaudio==2.0.2 pytorch-cuda=11.8 -c pytorch -c nvidia
-
-# Install the Faiss library (CPU version should be fine), this is used for quick indexing of pointclouds for duplicate object matching and merging
-conda install -c pytorch faiss-cpu=1.7.4 mkl=2021 blas=1.0=mkl
-
-# Install Pytorch3D (https://github.com/facebookresearch/pytorch3d/blob/main/INSTALL.md)
-# conda install pytorch3d -c pytorch3d # This detects a conflict. You can use the command below, maybe with a different version
-conda install https://anaconda.org/pytorch3d/pytorch3d/0.7.4/download/linux-64/pytorch3d-0.7.4-py310_cu118_pyt201.tar.bz2
-
-# We find that cuda development toolkit is the least problemantic way to install cuda. 
-# Make sure the version you install is at least close to your cuda version. 
-# See here: https://anaconda.org/conda-forge/cudatoolkit-dev
-conda install -c conda-forge cudatoolkit-dev
-
-# Install the other required libraries
-pip install tyro open_clip_torch wandb h5py openai hydra-core distinctipy ultralytics dill supervision open3d imageio natsort kornia rerun-sdk pyliblzfse pypng git+https://github.com/ultralytics/CLIP.git
+## 1. Installation 
+
+Local condition: 
+
+```text 
+Hardware: 
+    CPU Intel Core i7 12th 
+    GPU NVIDIA RTX 3070 Ti 8GB   
+OS: 
+    Ubuntu 22.04
+Softwares:
+    python 3.10 
+    GPU Driver Version 550.90
+    CUDA: 12.4
+```
+
+We will use python virtual environment and pip instead of Anaconda as used in the original instruction. To create your python environment, run the following commands: 
+
+```bash 
+## Create virtual environment 
+python3 -m venv conceptgraph 
+source conceptgraph/bin/activate 
+
+## Install PyTorch 
+# For Jetson platform, please install PyTorch as instructed here: https://forums.developer.nvidia.com/t/pytorch-for-jetson/72048
+pip install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu124
+
+## Install the Faiss library (CPU version should be fine), this is used for quick indexing of pointclouds for
+# duplicate object matching and merging
+pip install faiss-cpu==1.8.0.post1
+
+## Install PyTorch3D (stable version)
+pip install "git+https://github.com/facebookresearch/pytorch3d.git@stable"
+
+## CUDA Toolkit: This is a problematic step without using conda. Since I have CUDA Toolkit installed before, I am not
+# sure if there are any packages required CUDA other than PyTorch, however, if only PyTorch requires, the binary
+# PyTorch package installed above has already included its CUDA environment. If required,
+# please follow the instruction on https://developer.nvidia.com/cuda-12-4-0-download-archive?target_os=Linux&target_arch=x86_64&Distribution=Ubuntu&target_version=22.04
+
+## Install the other required libraries (with version used)
+pip install dill==0.3.8 distinctipy==1.3.4 h5py==3.11.0 hydra-core==1.3.2 imageio==2.34.2 kornia==0.7.3 natsort==8.4.0 open3d==0.18.0 open_clip_torch==2.26.1 openai==1.37.1 pyliblzfse==0.4.1 pypng==0.20220715.0 rerun-sdk==0.17.0 supervision==0.22.0 tyro==0.8.5 ultralytics==8.2.66 wandb==0.17.5
+
+pip install git+https://github.com/ultralytics/CLIP.git
 
 # You also need to ensure that the installed packages can find the right cuda installation.
 # You can do this by setting the CUDA_HOME environment variable.
 # You can manually set it to the python environment you are using, or set it to the conda prefix of the environment.
-# for me its export CUDA_HOME=/home/kuwajerw/anaconda3/envs/conceptgraph
-export CUDA_HOME=/path/to/anaconda3/envs/conceptgraph
+# for me its export CUDA_HOME=/home/kirinhuang/Documents/Code/Python/concept-graphs/conceptgraph
+export CUDA_HOME=/home/delta-agx-orin/concept-graphs/conceptgraph
 
-# Finally install conceptgraphs
+## Finally install conceptgraphs
 cd /path/to/code/ # wherever you want to install conceptgraphs
-# for me its /home/kuwajerw/repos/
-git clone https://github.com/concept-graphs/concept-graphs.git
+# For me, the path will be /home/kirinhuang/Documents/Code/Python/concept-graphs
+
+git clone https://github.com/hntkien/concept-graphs.git
 cd concept-graphs
 git checkout ali-dev
 pip install -e .
 ```
 
-### Datasets
+**Note:** In some case, an error will occur when building h5py package `ERROR: could not build wheels for h5py, which is required to install pyproject.toml-based projects`. This error occurs because there is no pre-built package for ARM or AARCH OS yet, so pip is trying to build h5py from source and it fails to find HDF5. If you encounter this issue, run the following command: 
 
-#### Replica 
+```bash 
+sudo apt install python3-dev libhdf5-dev 
+pip install cython 
+pip install h5py==3.11.0
+```
+
+
+## 2. Datasets 
+
+### Replica 
+
 Now you will need some data to run the code on, the easiest one to use is the [Replica](https://github.com/facebookresearch/Replica-Dataset). You can install it by using the following commands:
 
 ```bash
@@ -203,28 +95,37 @@ wget https://cvg-data.inf.ethz.ch/nice-slam/data/Replica.zip
 unzip Replica.zip
 ```
 
-#### iPhone scan via Record 3D app (r3d file) of a convenience store aisle
-I've also uploaded a scan I took of a convenience store with a lot of objects, you can download that from Kaggle via [this link](https://www.kaggle.com/datasets/alihkw/convinience-store-recording-via-the-record3d-app/). This is a record3d file `.r3d` that we will need to preprocess before we can use it as a dataset. More on that below.
 
-And now you will need to update the paths in the configuration files in the `conceptgraph/hydra_configs` directory to point to your paths. Which is discussed below:
+## 3. Classes File
 
-## Usage
-
-We have a lot of scripts with different features, but I reccomend starting with the `rerun_realtime_mapping.py` script, which runs the detections, builds the scene graph, and vizualizes the results all in one loop.
-
-**After you have changed the needed configuration values**, you can run a script with a simple command, for example:
+The classes file is used as a set of class labels to the object detection model. This is a tradeoff between sacrificing some "open-vocabulary-ness" for more stable detections. We have two classes files avaiable:
 
 ```bash
-# set up your config first as explained below, then
-cd /path/to/code/concept-graphs/conceptgraph/
-python slam/rerun_realtime_mapping.py
+concept-graphs/conceptgraph/scannet200_classes.txt
+concept-graphs/conceptgraph/ram_classes_4500.txt
+```
+
+The scannet classes are the labels from the [scannet200 dataset](https://rozdavid.github.io/scannet200).
+The ram classes are the tags from the [RAM model](https://recognize-anything.github.io/).
+
+Modify the classes file used in `/hydra_configs/classes.yaml`. 
+
+
+## 4. OpenAI Key 
+
+Please set the OpenAI API Key globally or locally in the virtual environment prior to running the scripts below. Setting in the virtual environment works for me but globally does not. Open `path/to/virtual/env/bin/activate` with any text editor and add the API Key as: 
+
+```bash
+export OPENAI_API_KEY="your_key"
 ```
 
 
-### Setting up your configuration 
-We use the [hydra](https://hydra.cc/) package to manage the configuration, so you don't have to give it a bunch of command line arguments, just edit the  entries in the corresponding `.yaml` file in `./conceptgraph/hydra_configs/` and run the script.
+## 5. Usage 
 
-For example here is my `./conceptgraph/hydra_configs/rerun_realtime_mapping.yaml` file:
+### 5.1 Setting up your configuration 
+We use the [hydra](https://hydra.cc/) package to manage the configuration, so you don't have to give it a bunch of command line arguments, just edit the  entries in the corresponding `.yaml` file in `./conceptgraph/hydra_configs/<script_name>` and run the script.
+
+For example, the configuration file for `./conceptgraph/slam/rerun_realtime_mapping.py` is `./conceptgraph/hydra_configs/rerun_realtime_mapping.yaml`. This configuration file looks like this: 
 
 ```yaml
 defaults:
@@ -247,35 +148,63 @@ stride: 10
 exp_suffix: r_mapping_stride_10_run2 # just a convenient name for the mapping run
 ```
 
-First the values are loaded from `base.yaml`, then `base_mapping.yaml` then `replica.yaml` and so on. If there is a conflict (i.e. two files are modifying the same config parameter), the values from the earlier file are overwritten. i.e. `replica.yaml` will overwrite any confliting values in `base.yaml` and so on.
+All the fundamental `.yaml` files are located in `./conceptgraph/hydra_configs/`. The values are loaded top-down, first from `base.yaml`, then `base_mapping.yaml` then `replica.yaml` and so on. If there is a conflict (i.e. two files are modifying the same config parameter), the values from the earlier file are overwritten. i.e. `replica.yaml` will overwrite any confliting values in `base.yaml` and so on.
 
-Finally `_self_` is loaded, which are te values in `rerun_realtime_mapping.yaml` itself. This is where you can put your own custom values. Also feel free to add your own `.yaml` files to `./conceptgraph/hydra_configs/` and they will be loaded in the same way.
+Finally `_self_` is loaded, which are the values in `rerun_realtime_mapping.yaml` itself. This is where you can put your own custom values. Also feel free to add your own `.yaml` files to `./conceptgraph/hydra_configs/` and they will be loaded in the same way.
 
-#### Paths
-
-The first thing to set in your config files is where you've installed conceptgraphs and where your data is. Update this in the `./conceptgraph/hydra_configs/base_paaths.yaml` file. For me, it is:
+Currently, three datasets were tested: replica, record3d, and realsense. Each dataset configuration file loads two variables called `data_root` and `repo_root` from `./conceptgraph/hydra_configs/base_paths.yaml` file. First, please go to that file and modify the paths according to your setup. In my case, this file will be: 
 
 ```yaml
-repo_root: /home/kuwajerw/repos/concept-graphs
-data_root: /home/kuwajerw/local_data
+repo_root: /home/kirinhuang/Documents/Code/Python/concept-graphs/concept-graphs
+data_root: /media/kirinhuang/SharedOS/my_local_data
 ```
 
-### Building the map
+(I cloned the `concept-graphs` repo into a directory called `concept-graphs`, this is not a typo. Also, all the dataset were stored in a directory called `my_local_data`, you can change the name as you wish)
 
-To build the map, simply run the following command from the `conceptgraph` directory:
+To run the detection script, you need to edit the paths for the dataset in the `.yaml` file. Here is an example of my `concept-graphs/conceptgraph/hydra_configs/realsense.yaml` file, you need to change these paths to point to where you stored the dataset for RealSense camera:
+
+```yaml
+defaults:
+  - base_paths
+  
+dataset_root: ${data_root}/realsense
+# (full) /media/kirinhuang/SharedOS/my_local_data/realsense
+scene_id: custom_dataset_1 
+dataset_config: ${repo_root}/conceptgraph/dataset/dataconfigs/realsense/manipulator_config.yaml
+render_camera_path: ${repo_root}/conceptgraph/dataset/dataconfigs/realsense/realsense_camera.json
+```
+
+
+### 5.2 Other configuration files
+In the `${repo_root}/conceptgraph/dataset/dataconfigs/` directory, there is one directory containing 2 files for each dataset. The `.yaml` file contains intrinsic parameters of the camera as variables. The `.json` files contains the camera's intrinsics and transformation matrices flattened as column vectors. These parameters are used to load the initial camera model for Open3D. 
+
+
+### 5.3 Running with Replica dataset 
+
+#### 5.3.1 Node prediction and edge prediction 
+
+First, open `./conceptgraph/hydra_configs/streamlined_detections.yaml` and change the `stride` and `exp_suffix` values as you wish. For instance, `stride = 5` means the program will run prediction on every 5 images in the dataset, i.e., image1 -> image5 -> image10 -> (...). `exp_suffix` determines the directory to store experimental results. Modifying this variable helps differentiate different experiments. Additionally, please specify which dataset you want to use by uncommenting it and commenting out the dataset you do not use. For example, assuming `exp_suffix = s_detections_stride50_yes_bg_44_mr`, here is what the directory tree for `room0` in the `Replica` dataset after running the script:
+
+```bash
+${data_root} # This is the dataset root
+./Replica # This is the dataset directory
+./Replica/room0 # This is the scene_id
+./Replica/room0/exps # This parent folder of all the results from conceptgraphs
+
+# This is the folder for the specific run, named according to the exp_suffix
+./Replica/room0/exps/s_detections_stride50_yes_bg_44_mr
+```
+
+**Note:** For large dataset with small camera transition, setting a higher value for `stride` helps the program run faster without affecting the result much because the difference between each frames is small. However, for fast-moving camera (and real-time run), a small value for `stride` (e.g., 1) will be better. 
+
+To run the script, simply run the following command from the `conceptgraph` directory:
 
 ```bash
 cd /path/to/code/concept-graphs/conceptgraph/
-python /slam/rerun_realtime_mapping.py
+python /scripts/streamlined_detections.py
 ```
 
-Note that if you don't have the models installed, it should just automatically download them for you.
-
-The results are saved in the corresponding dataset directory, in a folder called `exps`. It will name the folder with the `exp_suffix` you set in the configuration file, and also save a `config_params.json` file in that folder with the configuration parameters used for the run.
-
-**NOTE:** For convinience, the script will also automatically create a symlink `/concept-graphs/latest_pcd_save` -> `Replica/room0/exps/r_mapping_stride_10_run2/pcd_r_mapping_stride_10_run2.pkl.gz` so you can easily access the latest results by using the `latest_pcd_save` path in your argument to the visualization script.
-
-Here is what the ouput of running the mapping script looks like for `room0` in the `Replica` dataset:
+Note that if you don't have the models installed, it should just automatically download them for you. Here is what the ouput of running the detections script looks like for `room0` in the `Replica` dataset:
 
 ```bash
 .
@@ -283,36 +212,115 @@ Here is what the ouput of running the mapping script looks like for `room0` in t
 ./Replica/room0 # This is the scene_id
 ./Replica/room0/exps # This parent folder of all the results from conceptgraphs
 
-# This is the folder for the run's detections, named according to the exp_suffix
-./Replica/room0/exps/s_detections_stride_10_run2 
+# This is the folder for the specific run, named according to the exp_suffix
+./Replica/room0/exps/s_detections_stride50_yes_bg_44_mr 
 
 # This is where the visualizations are saved, they are images with bounding boxes and masks overlayed
-./Replica/room0/exps/s_detections_stride_10_run2/vis 
+./Replica/room0/exps/s_detections_stride50_yes_bg_44_mr/vis 
+./Replica/room0/exps/s_detections_stride50_yes_bg_44_mr/vis/frame000000.jpg 
+./Replica/room0/exps/s_detections_stride50_yes_bg_44_mr/vis/frame000050.jpg
+./Replica/room0/exps/s_detections_stride50_yes_bg_44_mr/vis/frame000100.jpg
+... # rest of the frames
+./Replica/room0/exps/s_detections_stride50_yes_bg_44_mr/vis/frame001950.jpg
 
 # This is where the detection results are saved, they are in the form of pkl.gz files 
 # that contain a dictionary of the detection results
-./Replica/room0/exps/s_detections_stride_10_run2/detections 
-
-# This is the mapping output folder for the specific run, named according to the exp_suffix
-./Replica/room0/exps/r_mapping_stride_10_run2/
-# This is the saved configuration file for the run
-./Replica/room0/exps/r_mapping_stride_10_run2/config_params.json
-# We also save the configuration file of the detection run which was used 
-./Replica/room0/exps/r_mapping_stride_10_run2/config_params_detections.json
-# The mapping results are saved in a pkl.gz file
-./Replica/room0/exps/r_mapping_stride_10_run2/pcd_r_mapping_stride_10_run2.pkl.gz
-# The video of the mapping process is saved in a mp4 file
-./Replica/room0/exps/r_mapping_stride_10_run2/s_mapping_r_mapping_stride_10_run2.mp4
-# If you set save_objects_all_frames=True, then the object mapping results are saved in a folder
-./Replica/room0/exps/r_mapping_stride_10_run2//saved_obj_all_frames
-# In the saved_obj_all_frames folder, there is a folder for each detection run used, and in each of those folders there is a pkl.gz file for each object mapping result
-./Replica/room0/exps/r_mapping_stride_10_run2/saved_obj_all_frames/det_exp_s_detections_stride_10_run2
-
+./Replica/room0/exps/s_detections_stride50_yes_bg_44_mr/detections 
+./Replica/room0/exps/s_detections_stride50_yes_bg_44_mr/detections/frame000000.pkl.gz
+./Replica/room0/exps/s_detections_stride50_yes_bg_44_mr/detections/frame000050.pkl.gz
+./Replica/room0/exps/s_detections_stride50_yes_bg_44_mr/detections/frame000100.pkl.gz
+... # rest of the frames
+./Replica/room0/exps/s_detections_stride50_yes_bg_44_mr/detections/frame001950.pkl.gz
 ```
 
-## Running the visualization script
 
-This script allows you to vizluatize the map in 3D and query the map objects with text. The `latest_pcd_save` symlink is used to point to the latest mapping results, but you can also point it to any other mapping results you want to visualize.
+#### 5.3.2 3D Mapping 
+
+Similarly, you need to edit the `streamlined_mapping.yaml` file in the `./conceptgraph/hydra_configs/` directory to point to your paths. Note that you need to tell the mapping script which detection results to use, so you need to set the `detections_exp_suffix` to the `exp_suffix` of the detection run you want to use. So following the example above, you would set 
+
+```yaml
+detections_exp_suffix: s_detections_stride50_yes_bg_44_mr
+```
+
+in the `streamlined_mapping.yaml` file. Note that the `exp_suffix` in this mapping configuration file can be difined as you like. Once you have set up your mapping configuration, then you can run the mapping script with the following command:
+
+```bash
+cd /path/to/code/concept-graphs/conceptgraph/
+python slam/streamlined_mapping.py
+```
+
+And here is what the output folder looks like for the mapping script:
+
+```bash
+.
+./Replica # This is the dataset root
+./Replica/room0 # This is the scene_id
+./Replica/room0/exps # This parent folder of all the results from conceptgraphs
+
+# This is the mapping output folder for the specific run, named according to the exp_suffix
+./Replica/room0/exps/s_mapping_yes_bg_multirun_49/
+# This is the saved configuration file for the run
+./Replica/room0/exps/s_mapping_yes_bg_multirun_49/config_params.json
+# We also save the configuration file of the detection run which was used 
+./Replica/room0/exps/s_mapping_yes_bg_multirun_49/config_params_detections.json
+# The mapping results are saved in a pkl.gz file
+./Replica/room0/exps/s_mapping_yes_bg_multirun_49/pcd_s_mapping_yes_bg_multirun_49.pkl.gz
+# The video of the mapping process is saved in a mp4 file
+./Replica/room0/exps/s_mapping_yes_bg_multirun_49/s_mapping_s_mapping_yes_bg_multirun_49.mp4
+# If you set save_objects_all_frames=True, then the object mapping results are saved in a folder
+./Replica/room0/exps/s_mapping_yes_bg_multirun_49//saved_obj_all_frames
+# In the saved_obj_all_frames folder, there is a folder for each detection run used, and in each of those folders there is a pkl.gz file for each object mapping result
+./Replica/room0/exps/s_mapping_yes_bg_multirun_49/saved_obj_all_frames/det_exp_s_detections_stride50_yes_bg_44_mr
+000001.pkl.gz
+000002.pkl.gz
+000003.pkl.gz
+...
+000039.pkl.gz
+meta.pkl.gz
+```
+
+
+#### 5.3.3 Visualization
+
+This script allows you to visualize the map in 3D and query the map objects with text. 
+
+```bash
+cd /path/to/code/concept-graphs/conceptgraph/
+python scripts/visualize_cfslam_results.py --result_path /path/to/output.pkl.gz
+```
+
+So for the above example where the output file is stored in `room0/exps/s_mapping_yes_bg_multirun_49/pcd_s_mapping_yes_bg_multirun_49.pkl.gz` this would look like 
+
+```bash
+cd /path/to/code/concept-graphs/conceptgraph/
+python scripts/visualize_cfslam_results.py --result_path /path/to/data/root/Replica/room0/exps/s_mapping_yes_bg_multirun_49/pcd_s_mapping_yes_bg_multirun_49.pkl.gz
+```
+
+Then in the open3d visualizer window, you can use the following key callbacks to change the visualization. 
+* Press `b` to toggle the background point clouds (wall, floor, ceiling, etc.). Only works on the ConceptGraphs-Detect.
+* Press `c` to color the point clouds by the object class from the tagging model. Only works on the ConceptGraphs-Detect.
+* Press `r` to color the point clouds by RGB. 
+* Press `f` and type text in the terminal, and the point cloud will be colored by the CLIP similarity with the input text. 
+* Press `i` to color the point clouds by object instance ID. 
+
+**Remember to click on the Open3D GUI before pressing any key**
+
+
+#### 5.3.4 All in one 
+
+The `rerun_realtime_mapping.py` script runs the detections, builds the scene graph, and vizualizes the results all in one loop. Configuration values are similar to those in the previous two files. This file helps with visualizing the map as it runs detection and mapping, allowing us to see how the whole pipeline works. Other than that, there is no use in running this script due to a high computational resource required. 
+
+**After you have changed the needed configuration values**, you can run a script with a simple command, for example:
+
+```bash
+# set up your config first as explained below, then
+cd /path/to/code/concept-graphs/conceptgraph/
+python slam/rerun_realtime_mapping.py
+```
+
+During execution, you can stop the program early instead of running on the whole dataset. Simply open `./conceptgraph/hydra_configs/early_exit.json`, change the value from `false` to `true` and save the file. Note that the first letter is not capitalized. 
+
+**NOTE:** For convinience, the script will also automatically create a symlink `/concept-graphs/latest_pcd_save` -> `Replica/room0/exps/r_mapping_stride_10_run2/pcd_r_mapping_stride_10_run2.pkl.gz` so you can easily access the latest results by using the `latest_pcd_save` path in your argument to the visualization script.
 
 ```bash
 cd /path/to/code/concept-graphs
@@ -328,87 +336,94 @@ python conceptgraph/scripts/visualize_cfslam_results.py \
     --result_path /path/to/data/Replica/room0/exps/r_mapping_stride_10_run2/pcd_r_mapping_stride_10_run2.pkl.gz
 ```
 
-## Searching the map with text
 
-Then in the open3d visualizer window, you can use the following key callbacks to change the visualization. 
-* Press `b` to toggle the background point clouds (wall, floor, ceiling, etc.). Only works on the ConceptGraphs-Detect.
-* Press `c` to color the point clouds by the object class from the tagging model. Only works on the ConceptGraphs-Detect.
-* Press `r` to color the point clouds by RGB. 
-* Press `f` and type text in the terminal, and the point cloud will be colored by the CLIP similarity with the input text. 
-* Press `i` to color the point clouds by object instance ID. 
+### 5.4 Running with RealSense Camera 
 
-Here is what it looks like to search for "cabinet" in the Replica `room0` scene.
+#### 5.4.1 Camera module 
 
-First we run the script, and then press `f` to trigger the `Enter your query:` input 
+First, install the `pyrealsense2` package. Note that only version <= 2.53 works with T265. 
 
-![CabinetPreSearch](./assets/cg_cabinet_pre_search.jpeg)
-
-And then we can type `cabinet` and press enter, and the point cloud will be colored by the CLIP similarity with the input text.
-
-![CabinetSearch](./assets/cg_cabinet_search.jpeg)
-
-## Using an iPhone as your RGB-D sensor
-
-For this, you'll need to use the Record3D app and buy the premium version which costs arouund $5-10. The scans you make using the app can be exported to an `.r3d` file. You can then use googledrive or a usb cable or something else to get the `.r3d` file on to your computer. Then right click -> extract out it's contents into a folder, and you'll probably wanna rename the folder to a convenient name. 
-
-
-Then you want to use the `concept-graphs/conceptgraph/dataset/preprocess_r3d_file.py` to convert that into a dataset that conceptgraphs can use. This is also covered in the getting started video. In the `preprocess_r3d_file.py`, set the datapath variable to your extracted r3d folder. So for me it is:
-
-```
-class ProgramArgs:
-    # this folder contains the metadata folder and the rgb folder etc inside it
-    datapath = "/home/kuwajerw/local_data/record3d_scans/co_store" 
+```bash
+# Install the latest version that still support T265
+pip install pyrealsense2==2.53.1.4623
 ```
 
-Let that script run, and now you'll have a folder called `/home/kuwajerw/local_data/record3d_scans/co_store_preprocessed` which you can use with ConceptGraphs, for which you can follow the same instructions as the Replica dataset.
+`./conceptgraph/realsense/realsense.py` defines a class to implement RealSense D435i and T265 cameras. The D435i can be replaced by any other RealSense stereo cameras, such as D400 series. (L515 (LiDAR) should work as well). For each frame, the module will output a color frame, depth frame, intrinsics matrix, and corrected transformation matrix for two cameras. These four outputs are of NumPy array data type. 
 
 
+#### 5.4.2 Offline detection
 
-## Streaming the map directly from an iPhone as you're doing the scan
+To perform offline prediction, we need to generate a dataset like Replica. Connect the cameras and run the script: 
 
-If you'd like to skip the dataset making process and build the map in near real time as you're recording the scan, you can use the `concept-graphs/conceptgraph/slam/r3d_stream_rerun_realtime_mapping.py` script for that, it's also covered in the getting started video. First you need to setup the record3D git repo, which requires installing cmake. After that, simply use the [USB streaming option](https://record3d.app/features) in the Record3D app, and then run the `r3d_stream_rerun_realtime_mapping.py` script to start building the map immediately. So that's:
+```bash 
+cd /path/to/code/concept-graphs/conceptgraph/
+python realsense/dataset_generation.py
 ```
-sudo apt install cmake
-```
-and then, with your `conceptgraph` conda environment active, run these commands from the record3D github [README file](https://github.com/marek-simonik/record3d?tab=readme-ov-file#python)
-```
-git clone https://github.com/marek-simonik/record3d
-cd record3d
-python setup.py install
-```
-and now you can run the `r3d_stream_rerun_realtime_mapping.py` same as the previous scripts. Of course, you will have to have the iPhone streaming via USB to your computer at the same time when you run the script.
+
+to generate a dataset in the directory specified in `./conceptgraph/hydra_configs/realsense.yaml`. The maximum frames generated is currently set to 300, but you can adjust according to your preference. You can also stop the program early if needed similar to part 5.3.4. 
+
+After obtaining the dataset, run 
+
 ```bash
 cd /path/to/code/concept-graphs/conceptgraph/
-python /slam/r3d_stream_rerun_realtime_mapping.py
+python /scripts/streamlined_detections.py
 ```
 
-## Debugging
-
-We've commited a pre-made vscode debug config file to the repo to make debugging simple. You can find it at `concept-graphs/.vscode/launch.json`. Here you'll find launch commands to run the core scripts talked about in this README. If you're not familiar with the vscode debugger, check out the getting started video, or the vscode [docs](https://code.visualstudio.com/docs/python/debugging).
+to perform detection, just as in 5.3.1. 
 
 
+#### 5.4.3 Online detection
 
-## Misc
+We can also generate the dataset and perform detection simultaneously. In this case, we will run detection for each frame obtained from the camera and save the results to the directory specified in the `realsense.yaml` configuration file. The configuration file used for this script is `streamlined_detections.yaml`. Early exit is also available with the same usage. Connect the cameras and run 
 
-To stop a script early, you can use the `concept-graphs/conceptgraph/hydra_configs/early_exit.json` file. If you set `early_exit: true` in the file, then the script will exit early after the current iteration is finished. This is useful if you want to stop the script early, but still save the results from the current iteration.
-
-# Classes File
-
-The classes file is used as a set of class labels to the object detection model. This is a tradeoff between sacrificing some "open-vocabulary-ness" for more stable detections. We have two classes files avaiable:
 ```bash
-concept-graphs/conceptgraph/scannet200_classes.txt
-concept-graphs/conceptgraph/ram_classes_4500.txt
+cd /path/to/code/concept-graphs/conceptgraph/
+python realsense/realtime_detections.py
 ```
-The scannet classes are the labels from the [scannet200 dataset](https://rozdavid.github.io/scannet200).
-The ram classes are the tags from the [RAM model](https://recognize-anything.github.io/).
+
+**Note:** Due to the sending/receiving request process of OpenAI, the processing time for each frame is long; thus, please avoid moving the camera too fast. Offline is a better choice if you want to have a clearer and more accurate map. 
 
 
-## Troubleshooting
+#### 5.4.4 Mapping
 
-Sometimes for X11 or Qt related errors, I had to put this in my bashrc file to fix it 
-    
+Both offline and online detection scripts generate the scene graph for each frame and stored the results in the corresponding location. Run the command
+
 ```bash
-export XKB_CONFIG_ROOT=/usr/share/X11/xkb
+cd /path/to/code/concept-graphs/conceptgraph/
+python slam/streamlined_mapping.py
 ```
 
-That's all for now, we will keep updating this README with more information as we go.
+to obtain the 3D map of the scene based on the detection result. Set `save_json` variable in `./conceptgraph/hydra_configs/base_mapping.yaml` to `True` will log the final scene graph results into a `.json` file which include the objects and their relationships. If, for instance, the `exp_suffix` in the `streamlined_mapping.yaml` is `s_mapping_stride3_1`, then the `.json` file will be saved in `${data_root}/{dataset_name}/{scene_id}/exps/s_mapping_stride3_1/edge_json_s_mapping_stride3_1.json`. 
+
+
+#### 5.4.5 Visualization 
+
+Run the command:
+
+```bash
+cd /path/to/code/concept-graphs/conceptgraph/
+python scripts/visualize_cfslam_results.py --result_path /path/to/mapping_output.pkl.gz
+```
+
+and perform segmentation/grounding task as in 5.3.3. 
+
+
+#### 5.4.5 All in one (!!!)
+
+Run the following command:
+
+```bash
+cd /path/to/code/concept-graphs/conceptgraph/
+python realsense/rs_stream_rerun_realtime_mapping.py
+```
+
+to do the same as in 5.3.4. However, due the rendering process, this program requires a large computational resource. 
+
+
+### 6. Boolean variables for rendering
+
+- make_edges: `True` will generate the edge between two objects. `False` otherwise
+- save_video: Save a video recording the detection/mapping procedure for each frame. 
+- save_objects_all_frames: Save metadata of the objects for each frame 
+- vis_render: Open3D video rendering as the program is running. Recommend to be False so as not to consume GPU resource
+- use_rerun: Decide whether to visualize the process with rerun.io

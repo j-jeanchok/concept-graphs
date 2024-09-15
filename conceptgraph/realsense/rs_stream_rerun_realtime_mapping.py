@@ -1,197 +1,185 @@
-'''
-The script is used to model Grounded SAM detections in 3D, it assumes the tag2text classes are avaialable. It also assumes the dataset has Clip features saved for each object/mask.
-'''
-
-# Standard library imports
-import os
-from pathlib import Path
-import pickle
+# ===== Standard Library Imports ===== # 
+import os 
+# from pathlib import Path 
+import pickle 
 import gzip
 
-# Third-party imports
-import cv2
-import numpy as np
-import torch
-from PIL import Image
-from tqdm import trange
-import open3d as o3d
-import hydra
-from omegaconf import DictConfig
-import open_clip
-from ultralytics import YOLO, SAM
-import supervision as sv
-from collections import Counter
+# ===== Third-party Imports ===== #
+from conceptgraph.realsense.realsense import RealSenseApp 
+import cv2 
+import numpy as np 
+# import scipy.ndimage as ndi 
+import torch 
+from PIL import Image 
+from tqdm import trange 
+import open3d as o3d 
+import hydra 
+from omegaconf import DictConfig 
+import open_clip 
+from ultralytics import YOLO, SAM 
+import supervision as sv 
 
-# Local application/library specific imports
+# ===== Local application/library scpecific imports ===== #
 from conceptgraph.utils.optional_rerun_wrapper import (
     OptionalReRun, 
     orr_log_annotated_image, 
     orr_log_camera, 
     orr_log_depth_image, 
-    orr_log_edges, 
     orr_log_objs_pcd_and_bbox, 
     orr_log_rgb_image, 
     orr_log_vlm_image
 )
-from conceptgraph.utils.optional_wandb_wrapper import OptionalWandB
-# from conceptgraph.utils.geometry import rotation_matrix_to_quaternion
-from conceptgraph.utils.logging_metrics import DenoisingTracker, MappingTracker
-from conceptgraph.utils.vlm import (
-    consolidate_captions, 
-    # get_obj_rel_from_image_gpt4v, 
-    get_openai_client
-)
-from conceptgraph.utils.ious import mask_subtract_contained
+from conceptgraph.utils.optional_wandb_wrapper import OptionalWandB 
+from conceptgraph.utils.logging_metrics import MappingTracker 
+from conceptgraph.utils.vlm import get_openai_client 
+from conceptgraph.utils.ious import mask_subtract_contained 
 from conceptgraph.utils.general_utils import (
     ObjectClasses, 
-    # find_existing_image_path, 
     get_det_out_path, 
     get_exp_out_path, 
-    get_vlm_annotated_image_path, 
+    get_stream_data_out_path, 
+    get_vlm_annotated_image_path,
     handle_rerun_saving, 
     load_saved_detections, 
-    # load_saved_hydra_json_config, 
-    make_vlm_edges_and_captions, 
+    make_vlm_edges_and_captions,
     measure_time, 
-    save_detection_results,
-    save_edge_json, 
-    save_hydra_config,
-    save_obj_json, 
+    save_detection_results, 
+    save_hydra_config, 
     save_objects_for_frame, 
-    save_pointcloud, 
-    should_exit_early, 
+    save_pointcloud,
+    should_exit_early,
     vis_render_image
 )
-from conceptgraph.dataset.datasets_common import get_dataset
 from conceptgraph.utils.vis import (
     OnlineObjectRenderer, 
-    # save_video_from_frames, 
     vis_result_fast_on_depth, 
-    # vis_result_for_vlm, 
-    vis_result_fast, 
-    save_video_detections
+    vis_result_fast,
+    save_video_detections 
 )
-from conceptgraph.slam.slam_classes import MapEdgeMapping, MapObjectList
+from conceptgraph.slam.slam_classes import MapEdgeMapping, MapObjectList 
 from conceptgraph.slam.utils import (
-    filter_gobs,
-    filter_objects,
-    get_bounding_box,
-    init_process_pcd,
-    make_detection_list_from_pcd_and_gobs,
-    denoise_objects,
+    filter_gobs, 
+    filter_objects, 
+    get_bounding_box, 
+    init_process_pcd, 
+    make_detection_list_from_pcd_and_gobs, 
+    denoise_objects, 
     merge_objects, 
-    detections_to_obj_pcd_and_bbox,
-    # prepare_objects_save_vis,
-    process_cfg,
-    process_edges,
-    # process_pcd,
-    processing_needed,
+    detections_to_obj_pcd_and_bbox, 
+    process_cfg, 
+    process_edges, 
+    processing_needed, 
     resize_gobs
 )
 from conceptgraph.slam.mapping import (
-    compute_spatial_similarities,
-    compute_visual_similarities,
-    aggregate_similarities,
-    match_detections_to_objects,
-    merge_obj_matches
+    compute_spatial_similarities, 
+    compute_visual_similarities, 
+    aggregate_similarities, 
+    match_detections_to_objects, 
+    merge_obj_matches 
 )
-from conceptgraph.utils.model_utils import compute_clip_features_batched
-from conceptgraph.utils.general_utils import get_vis_out_path, cfg_to_dict, check_run_detections
+from conceptgraph.utils.model_utils import compute_clip_features_batched 
+from conceptgraph.utils.general_utils import get_vis_out_path, cfg_to_dict,check_run_detections 
 
+# Disblae torch gradient computation 
+torch.set_grad_enabled(False) 
 
-# Disable torch gradient computation
-torch.set_grad_enabled(False)
+# ===== A Logger for this File ===== #
+@hydra.main(
+    version_base=None, 
+    config_path="../hydra_configs/",
+    config_name="rerun_realtime_mapping")
 
-# A logger for this file
-@hydra.main(version_base=None, config_path="../hydra_configs/", config_name="rerun_realtime_mapping")
-# @profile
-def main(cfg : DictConfig):
-    tracker = MappingTracker()
+def main(cfg: DictConfig):
+
+    app = RealSenseApp() 
+
+    tracker = MappingTracker() 
+
+    orr = OptionalReRun() 
+    orr.set_use_rerun(cfg.use_rerun) 
+    orr.init("realtime_mapping") 
+    orr.spawn() 
+
+    owandb = OptionalWandB() 
+    owandb.set_use_wandb(cfg.use_wandb) 
+    owandb.init(
+        project="concept-graphs", 
+        config=cfg_to_dict(cfg)) 
     
-    orr = OptionalReRun()
-    orr.set_use_rerun(cfg.use_rerun)
-    orr.init("realtime_mapping")
-    orr.spawn()
+    cfg = process_cfg(cfg) 
 
-    owandb = OptionalWandB()
-    owandb.set_use_wandb(cfg.use_wandb)
-    owandb.init(project="concept-graphs", 
-            #    entity="concept-graphs",
-                config=cfg_to_dict(cfg),)
-    cfg = process_cfg(cfg)
+    objects = MapObjectList(device=cfg.device) 
+    map_edges = MapEdgeMapping(objects) 
 
-    # Initialize the dataset
-    dataset = get_dataset(
-        dataconfig=cfg.dataset_config,
-        start=cfg.start,
-        end=cfg.end,
-        stride=cfg.stride,
-        basedir=cfg.dataset_root,
-        sequence=cfg.scene_id,
-        desired_height=cfg.image_height,
-        desired_width=cfg.image_width,
-        device="cpu",
-        dtype=torch.float,
-    )
-    # cam_K = dataset.get_cam_K()
-
-    objects = MapObjectList(device=cfg.device)
-    map_edges = MapEdgeMapping(objects)
-
-    # For visualization
+    # for visualisation 
     if cfg.vis_render:
-        view_param = o3d.io.read_pinhole_camera_parameters(cfg.render_camera_path)
+        view_param = o3d.io.read_pinhole_camera_parameters(
+            cfg.render_camera_path) 
         obj_renderer = OnlineObjectRenderer(
-            view_param = view_param,
-            base_objects = None, 
-            gray_map = False,
-        )
+            view_param=view_param, 
+            base_objects=None, 
+            gray_map=False) 
         frames = []
-    # output folder for this mapping experiment
-    exp_out_path = get_exp_out_path(cfg.dataset_root, cfg.scene_id, cfg.exp_suffix)
-
-    # output folder of the detections experiment to use
-    det_exp_path = get_exp_out_path(cfg.dataset_root, cfg.scene_id, cfg.detections_exp_suffix, make_dir=False)
-
-    # we need to make sure to use the same classes as the ones used in the detections
-    detections_exp_cfg = cfg_to_dict(cfg)
-    obj_classes = ObjectClasses(
-        classes_file_path=detections_exp_cfg['classes_file'], 
-        bg_classes=detections_exp_cfg['bg_classes'], 
-        skip_bg=detections_exp_cfg['skip_bg']
-    )
-
-    # if we need to do detections
-    run_detections = check_run_detections(cfg.force_detection, det_exp_path)
-    det_exp_pkl_path = get_det_out_path(det_exp_path)
-    det_exp_vis_path = get_vis_out_path(det_exp_path)
     
-    prev_adjusted_pose = None
+    # Output folder for this mapping experiement 
+    exp_out_path = get_exp_out_path(
+        dataset_root=cfg.dataset_root, 
+        scene_id=cfg.scene_id, 
+        exp_suffix=cfg.exp_suffix, 
+        make_dir=True)
+    
+    # Output folder of the detections experiment to use 
+    det_exp_path = get_exp_out_path(
+        dataset_root=cfg.dataset_root, 
+        scene_id=cfg.scene_id, 
+        exp_suffix=cfg.detections_exp_suffix, 
+        make_dir=False)
+    
+    # We need to make sure to use the same classes as the ones used in the detections 
+    detections_exp_cfg = cfg_to_dict(cfg) 
+    obj_classes = ObjectClasses(
+        classes_file_path=detections_exp_cfg["classes_file"], 
+        bg_classes=detections_exp_cfg["bg_classes"], 
+        skip_bg=detections_exp_cfg["skip_bg"])
+    
+    # If we need to do detections 
+    run_detections = check_run_detections(cfg.force_detection, det_exp_path) 
+    det_exp_pkl_path = get_det_out_path(det_exp_path) 
+    det_exp_vis_path = get_vis_out_path(det_exp_path) 
+
+    stream_rgb_path, stream_depth_path, stream_poses_path = get_stream_data_out_path(
+        dataset_root=cfg.dataset_root, 
+        scene_id=cfg.scene_id,
+        make_dir=True)
+    
+    prev_adjusted_pose = None 
 
     if run_detections:
-        print("\n".join(["Running detections..."] * 10))
-        det_exp_path.mkdir(parents=True, exist_ok=True)
+        print("\n".join(["Running detections..."] * 5)) 
+        det_exp_path.mkdir(parents=True, exist_ok=True) 
 
         ## Initialize the detection models
         detection_model = measure_time(YOLO)('yolov8l-world.pt')
-        # sam_predictor = SAM('sam_l.pt') 
-        sam_predictor = SAM('mobile_sam.pt') # UltraLytics SAM
-        # sam_predictor = measure_time(get_sam_predictor)(cfg) # Normal SAM
+        sam_predictor = SAM('mobile_sam.pt')
         clip_model, _, clip_preprocess = open_clip.create_model_and_transforms(
-            "ViT-H-14", "laion2b_s32b_b79k"
-        )
+            "ViT-H-14", "laion2b_s32b_b79k")
         clip_model = clip_model.to(cfg.device)
         clip_tokenizer = open_clip.get_tokenizer("ViT-H-14")
 
         # Set the classes for the detection model
         detection_model.set_classes(obj_classes.get_classes_arr())
-    else:
-        print("\n".join(["NOT Running detections..."] * 10))
 
-    openai_client = get_openai_client()
+        openai_client = get_openai_client()
+        
+    else:
+        print("\n".join(["NOT Running detections..."] * 5))
 
     save_hydra_config(cfg, exp_out_path)
-    save_hydra_config(detections_exp_cfg, exp_out_path, is_detection_config=True)
+    save_hydra_config(
+        detections_exp_cfg, 
+        exp_out_path, 
+        is_detection_config=True)
 
     if cfg.save_objects_all_frames:
         obj_all_frames_out_path = exp_out_path / "saved_obj_all_frames" / f"det_{cfg.detections_exp_suffix}"
@@ -199,9 +187,12 @@ def main(cfg : DictConfig):
 
     exit_early_flag = False
     counter = 0
+    frame_idx = 0
+    total_frames = 30 # adjust as you like
 
-    for frame_idx in trange(len(dataset)):
-        torch.cuda.empty_cache() 
+    for frame_idx in trange(total_frames):
+        
+        torch.cuda.empty_cache()
 
         tracker.curr_frame_idx = frame_idx
         counter+=1
@@ -213,27 +204,45 @@ def main(cfg : DictConfig):
             exit_early_flag = True
 
         # If exit early flag is set and we're not at the last frame, skip this iteration
-        if exit_early_flag and frame_idx < len(dataset) - 1:
+        if exit_early_flag and frame_idx < total_frames - 1:
             continue
+        
+        # Get the frame data
+        s_rgb, s_depth, s_intrinsic_mat, s_camera_pose = app.get_frame_data()
 
-        # Read info about current frame from dataset
+        # save the rgb to the stream folder with an appropriate name
+        curr_stream_rgb_path = stream_rgb_path / f"{frame_idx}.jpg"
+        cv2.imwrite(str(curr_stream_rgb_path), s_rgb)
+        color_path = curr_stream_rgb_path
+        
+        if cfg.save_detections:
+        
+            # save depth to the stream folder with an appropriate name
+            curr_stream_depth_path = stream_depth_path / f"{frame_idx}.png"
+            cv2.imwrite(str(curr_stream_depth_path), s_depth)
+            
+            # save the camera pose to the stream folder with an appropriate name 
+            curr_stream_pose_path = stream_poses_path / f"{frame_idx}.npz"
+            np.savez(str(curr_stream_pose_path), s_camera_pose)
+
+        # Read info about current frame from stream
         # color image
-        color_path = Path(dataset.color_paths[frame_idx])
         image_original_pil = Image.open(color_path)
-        # color and depth tensors, and camera instrinsics matrix
-        color_tensor, depth_tensor, intrinsics, *_ = dataset[frame_idx]
-
+        
+        color_tensor = torch.from_numpy(s_rgb.astype('float32')) 
+        depth_tensor = torch.from_numpy(s_depth.astype('float32'))
+        intrinsics = s_intrinsic_mat
+        
         # Covert to numpy and do some sanity checks
-        depth_tensor = depth_tensor[..., 0]
         depth_array = depth_tensor.cpu().numpy()
-        color_np = color_tensor.cpu().numpy() # (H, W, 3)
-        image_rgb = (color_np).astype(np.uint8) # (H, W, 3)
+        # color_np = color_tensor.cpu().numpy() # (H, W, 3)
+        image_rgb = (color_tensor.cpu().numpy()).astype(np.uint8) # (H, W, 3)
         assert image_rgb.max() > 1, "Image is not in range [0, 255]"
 
         # Load image detections for the current frame
         raw_gobs = None
         gobs = None # stands for grounded observations
-        detections_path = det_exp_pkl_path / (color_path.stem + ".pkl.gz")
+        # detections_path = det_exp_pkl_path / (color_path.stem + ".pkl.gz")
         
         vis_save_path_for_vlm = get_vlm_annotated_image_path(det_exp_vis_path, color_path)
         vis_save_path_for_vlm_edges = get_vlm_annotated_image_path(det_exp_vis_path, color_path, w_edges=True)
@@ -262,7 +271,7 @@ def main(cfg : DictConfig):
                 masks_np = masks_tensor.cpu().numpy()
             else:
                 masks_np = np.empty((0, *color_tensor.shape[:2]), dtype=np.float64)
-
+                
             # Create a detections object that we will save later
             curr_det = sv.Detections(
                 xyxy=xyxy_np,
@@ -271,10 +280,9 @@ def main(cfg : DictConfig):
                 mask=masks_np,
             )
             
-            # Make the edges
-            labels, edges, _, captions = make_vlm_edges_and_captions(image, curr_det, obj_classes, detection_class_labels, det_exp_vis_path, color_path, cfg.make_edges, openai_client)
-            # labels, edges, edge_image, captions = make_vlm_edges_and_captions(image, curr_det, obj_classes, detection_class_labels, det_exp_vis_path, color_path, True, None)
-
+            # No edges during streaming for now
+            labels, edges, _, _ = make_vlm_edges_and_captions(image, curr_det, obj_classes, detection_class_labels, det_exp_vis_path, color_path, make_edges_flag=False, openai_client=openai_client)
+            
             image_crops, image_feats, text_feats = compute_clip_features_batched(
                 image_rgb, curr_det, clip_model, clip_preprocess, clip_tokenizer, obj_classes.get_classes_arr(), cfg.device)
 
@@ -296,7 +304,7 @@ def main(cfg : DictConfig):
                 "detection_class_labels": detection_class_labels,
                 "labels": labels,
                 "edges": edges,
-                "captions": captions,
+                "captions": ""
             }
 
             raw_gobs = results
@@ -320,15 +328,14 @@ def main(cfg : DictConfig):
             # Support current and old saving formats
             if os.path.exists(det_exp_pkl_path / color_path.stem):
                 raw_gobs = load_saved_detections(det_exp_pkl_path / color_path.stem)
-            elif os.path.exists(det_exp_pkl_path / f"{int(color_path.stem[-6:]):06}"):
-                raw_gobs = load_saved_detections(det_exp_pkl_path / f"{int(color_path.stem[-6:]):06}")
+            elif os.path.exists(det_exp_pkl_path / f"{int(color_path.stem):06}"):
+                raw_gobs = load_saved_detections(det_exp_pkl_path / f"{int(color_path.stem):06}")
             else:
                 # if no detections, throw an error
-                raise FileNotFoundError(f"No detections found for frame {frame_idx}at paths \n{det_exp_pkl_path / color_path.stem} or \n{det_exp_pkl_path / f'{int(color_path.stem[-6:]):06}'}.")
+                raise FileNotFoundError(f"No detections found for frame {frame_idx}at paths \n{det_exp_pkl_path / color_path.stem} or \n{det_exp_pkl_path / f'{int(color_path.stem):06}'}.")
 
         # get pose, this is the untrasformed pose.
-        unt_pose = dataset.poses[frame_idx]
-        unt_pose = unt_pose.cpu().numpy()
+        unt_pose = s_camera_pose
 
         # Don't apply any transformation otherwise
         adjusted_pose = unt_pose
@@ -344,7 +351,9 @@ def main(cfg : DictConfig):
         # resize the observation if needed
         resized_gobs = resize_gobs(raw_gobs, image_rgb)
         # filter the observations
-        filtered_gobs = filter_gobs(resized_gobs, image_rgb, 
+        filtered_gobs = filter_gobs(
+            resized_gobs, 
+            image_rgb, 
             skip_bg=cfg.skip_bg,
             BG_CLASSES=obj_classes.get_bg_classes_arr(),
             mask_area_threshold=cfg.mask_area_threshold,
@@ -363,7 +372,7 @@ def main(cfg : DictConfig):
         obj_pcds_and_bboxes = measure_time(detections_to_obj_pcd_and_bbox)(
             depth_array=depth_array,
             masks=gobs['mask'],
-            cam_K=intrinsics.cpu().numpy()[:3, :3],  # Camera intrinsics
+            cam_K=intrinsics[:3, :3],  # Camera intrinsics
             image_rgb=image_rgb,
             trans_pose=adjusted_pose,
             min_points_threshold=cfg.min_points_threshold,
@@ -441,34 +450,20 @@ def main(cfg : DictConfig):
             device=cfg['device']
             # Note: Removed 'match_method' and 'phys_bias' as they do not appear in the provided merge function
         )
-        # fix the class names for objects
-        # they should be the most popular name, not the first name
-        for idx, obj in enumerate(objects):
-            temp_class_name = obj["class_name"]
-            curr_obj_class_id_counter = Counter(obj['class_id'])
-            most_common_class_id = curr_obj_class_id_counter.most_common(1)[0][0]
-            most_common_class_name = obj_classes.get_classes_arr()[most_common_class_id]
-            if temp_class_name != most_common_class_name:
-                obj["class_name"] = most_common_class_name
+        map_edges = process_edges(
+            match_indices=match_indices, 
+            gobs=gobs, 
+            initial_objects_count=len(objects), 
+            objects=objects, 
+            map_edges=map_edges, 
+            frame_idx=frame_idx)
 
-        map_edges = process_edges(match_indices, gobs, len(objects), objects, map_edges, frame_idx)
-        is_final_frame = frame_idx == len(dataset) - 1
+        is_final_frame = frame_idx == total_frames - 1
         if is_final_frame:
             print("Final frame detected. Performing final post-processing...")
 
-        # Clean up outlier edges
-        edges_to_delete = []
-        for curr_map_edge in map_edges.edges_by_index.values():
-            curr_obj1_idx = curr_map_edge.obj1_idx
-            curr_obj2_idx = curr_map_edge.obj2_idx
-            obj1_class_name = objects[curr_obj1_idx]['class_name'] 
-            obj2_class_name = objects[curr_obj2_idx]['class_name']
-            curr_first_detected = curr_map_edge.first_detected
-            curr_num_det = curr_map_edge.num_detections
-            if (frame_idx - curr_first_detected > 5) and curr_num_det < 2:
-                edges_to_delete.append((curr_obj1_idx, curr_obj2_idx))
-        for edge in edges_to_delete:
-            map_edges.delete_edge(edge[0], edge[1])
+        torch.cuda.empty_cache() 
+            
         ### Perform post-processing periodically if told so
 
         # Denoising
@@ -509,7 +504,7 @@ def main(cfg : DictConfig):
             frame_idx,
             is_final_frame,
         ):
-            objects, map_edges = measure_time(merge_objects)(
+            objects = measure_time(merge_objects)(
                 merge_overlap_thresh=cfg["merge_overlap_thresh"],
                 merge_visual_sim_thresh=cfg["merge_visual_sim_thresh"],
                 merge_text_sim_thresh=cfg["merge_text_sim_thresh"],
@@ -520,11 +515,11 @@ def main(cfg : DictConfig):
                 dbscan_min_points=cfg["dbscan_min_points"],
                 spatial_sim_type=cfg["spatial_sim_type"],
                 device=cfg["device"],
-                do_edges=cfg["make_edges"],
+                do_edges=False, # false for now, otherwise use cfg["make_edges"],
                 map_edges=map_edges
-            )
+            )   
         orr_log_objs_pcd_and_bbox(objects, obj_classes)
-        orr_log_edges(objects, map_edges, obj_classes)
+        # orr_log_edges(objects, map_edges, obj_classes) # not using edges for now 
 
         if cfg.save_objects_all_frames:
             save_objects_for_frame(
@@ -586,14 +581,10 @@ def main(cfg : DictConfig):
                 "exit_early_flag": exit_early_flag,
                 "is_final_frame": is_final_frame,
                 })
+        
+        torch.cuda.empty_cache() 
     # LOOP OVER -----------------------------------------------------
     
-    # Consolidate captions 
-    for object in objects:
-        obj_captions = object['captions'][:20]
-        consolidated_caption = consolidate_captions(openai_client, obj_captions)
-        object['consolidated_caption'] = consolidated_caption
-
     handle_rerun_saving(cfg.use_rerun, cfg.save_rerun, cfg.exp_suffix, exp_out_path)
 
     # Save the pointcloud
@@ -606,20 +597,6 @@ def main(cfg : DictConfig):
             obj_classes=obj_classes,
             latest_pcd_filepath=cfg.latest_pcd_filepath,
             create_symlink=True,
-            edges=map_edges
-        )
-
-    if cfg.save_json:
-        save_obj_json(
-            exp_suffix=cfg.exp_suffix,
-            exp_out_path=exp_out_path,
-            objects=objects
-        )
-        
-        save_edge_json(
-            exp_suffix=cfg.exp_suffix,
-            exp_out_path=exp_out_path,
-            objects=objects,
             edges=map_edges
         )
 
